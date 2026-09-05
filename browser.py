@@ -1,290 +1,66 @@
-import base64
-import gzip
-import html
-import os
-import socket
-import ssl
+import tkinter
 import sys
-import urllib.parse
-import zlib
+import html
+import re
 
-class browser:
-    connections = {}
-    
-    def __init__(self, url):
-        self.original_url = url
-        self.redirect_url = None
-        self.view_source = False
-        self.scheme, url = url.split(":", 1)
-        
-        if self.scheme == ("view-source"):
-            self.view_source = True
-            self.scheme, url = url.split(":", 1)
-        
-        assert self.scheme in ["http", "https", "file", "data"]
-            
-        if self.scheme == "file":
-            self.path = os.path.abspath(url)
-            return
-        
-        if self.scheme == "data":
-            self.data = url
-            return
-        
-        url = url.lstrip("/")
-        if self.scheme == "http":
-            self.port = 80
-        elif self.scheme == "https":
-            self.port = 443
-            
-        if "/" not in url:
-            url = url + "/"
-        self.host, url = url.split("/", 1)
-        if ":" in self.host:
-            self.host, port = self.host.split(":", 1)
-            self.port = int(port)
-        self.path = "/" + url
-        
-    def connection_key(self):
-        return self.scheme, self.host, self.port
-    
-    def connect(self):
-        key = self.connection_key()
-        
-        if key in browser.connections:
-            return browser.connections[key]
-        
-        s = socket.socket(
-            family = socket.AF_INET,
-            type = socket.SOCK_STREAM,
-            proto = socket.IPPROTO_TCP
+from page import Page
+WIDTH, HEIGHT = 800, 600
+HSTEP, VSTEP = 13, 18
+SCROLL_STEP = 100
+class Browser:
+    def __init__(self):
+        self.window = tkinter.Tk()
+        self.canvas = tkinter.Canvas(
+            self.window,
+            width = WIDTH,
+            height = HEIGHT
         )
+        self.canvas.pack()
+        self.display_list = []
+        self.scroll = 0
+        self.window.bind("<Down>", self.scrolldown)
         
-        s.connect((self.host, self.port))
+    def strip_html(self, body):
+        body = re.sub(
+            r"<(script|style).*?>.*?</\1>",
+            "",
+            body,
+            flags=re.DOTALL | re.IGNORECASE
+        )
+        body = re.sub(r"<[^>]*>", "", body)
         
-        if self.scheme == "https":
-            ctx = ssl.create_default_context()
-            s = ctx.wrap_socket(s, server_hostname=self.host)
-        
-        browser.connections[key] = s
-        return s
+        return html.unescape(body)
     
-    def receive_until(self, s, marker):
-        data = b""
+    def scrolldown(self, e):
+        self.scroll += SCROLL_STEP
+        self.draw()
         
-        while marker not in data:
-            chunk = s.recv(4096)
-            
-            if not chunk:
-                raise ConnectionError("Connection closed while reading response")
-            
-            data += chunk
-            
-        return data
-    
-    def receive_exactly(self, s, amount):
-        data = b""
+    def draw(self):
+        self.canvas.delete("all")
+        for x, y, c in self.display_list:
+            if y > self.scroll + HEIGHT: continue
+            if y + VSTEP < self.scroll: continue
+            self.canvas.create_text(x,y - self.scroll,text = c)
+
+    def load(self, url, max_redirects = 10):
         
-        while len(data) < amount:
-            chunk = s.recv(amount - len(data))
-        
-            if not chunk:
-                raise ConnectionError("Connection closed while reading body")
+        url, body = load_page(url)
+        if url.view_source:
+            display_text = body
+        else:
+            display_text = self.strip_html(body)
             
-            data += chunk
-        return data
-        
-    def read_chunked_body(self, s, data):
-        content = b""
-
-        while True:
-            while b"\r\n" not in data:
-                chunk = s.recv(4096)
-
-                if not chunk:
-                    raise ConnectionError("Connection closed while reading chunk size")
-
-                data += chunk
-
-            size_line, data = data.split(b"\r\n", 1)
-            chunk_size = int(size_line.decode("ascii"), 16)
-
-            if chunk_size == 0:
-                while len(data) < 2:
-                    data += s.recv(4096)
-
-                return content
-
-            while len(data) < chunk_size + 2:
-                chunk = s.recv(4096)
-
-                if not chunk:
-                    raise ConnectionError("Connection closed while reading chunk")
-
-                data += chunk
-
-            content += data[:chunk_size]
-
-            data = data[chunk_size + 2:]
+        self.display_list = layout(display_text)
+        self.draw()
         
         
-    def request(self):
-        if self.scheme == "data":
-            try:
-                metadata, data = self.data.split(",", 1)
-            except ValueError:
-                print("Invalid data URL")
-                sys.exit(1)
-            
-            is_base64 = metadata.endswith(";base64")
-            if is_base64:
-                try:
-                    content = base64.b64decode(data)
-                except ValueError:
-                    print("Invalid base64 data URL")
-                    sys.exit(1)
-            else:
-                content = urllib.parse.unquote_to_bytes(data)
-            try:
-                return content.decode("utf-8")
-            except UnicodeDecodeError:
-                return content.decode("utf-8", errors="replace")
-        
-        
-        if self.scheme == "file":
-            try:
-                with open(self.path, "r", encoding="utf8") as f:
-                    return f.read()
-            except FileNotFoundError:
-                print(f"File not found: {self.path}")
-                sys.exit(1)
-            except PermissionError:
-                print(f"Permission denied: {self.path}")
-                sys.exit(1)
-                
-        s = self.connect()
-                
-        headers = {
-            "Host": self.host,
-            "Connection": "keep-alive",
-            "User-Agent": "Mecks",
-            "Accept-Encoding": "gzip, deflate"
-        }
-        
-        
-        request = "GET {} HTTP/1.0\r\n".format(self.path)
-        for header, value in headers.items():
-            request += f"{header}: {value}\r\n"
-        request += "\r\n"
-        
-        try:
-            s.sendall(request.encode("utf-8"))
-            
-            raw_response = self.receive_until(s, b"\r\n\r\n")
-            
-            header_data, body_start = raw_response.split(b"\r\n\r\n", 1)
-            header_lines = header_data.decode("iso-8859-1").split("\r\n")
-            
-            status_line = header_lines[0]
-            version, status, explanation = status_line.split(" ", 2)
-            
-            status_code = int(status)
-            
-            response_headers = {}
-            
-            for line in header_lines[1:]:
-                header, value = line.split(":", 1)
-                response_headers[header.casefold()] = value.strip()
-                
-            print("Content-Encoding:", response_headers.get("content-encoding"))
-            
-            redirect_statuses = {301, 302, 303, 307, 308}
-            
-            if status_code in redirect_statuses:
-                location = response_headers.get("location")
-                if location is not None:
-                    self.redirect_url = urllib.parse.urljoin(
-                        self.original_url,
-                        location
-                    )
-
-            content_encoding = response_headers.get("content-encoding", "").casefold()
-            if "content-length" in response_headers:
-                content_length = int(response_headers["content-length"])
-                remaining = content_length - len(body_start)
-
-                if remaining > 0:
-                    content = body_start + self.receive_exactly(s, remaining)
-                else:
-                    content = body_start[:content_length]
-
-            elif response_headers.get("transfer-encoding") == "chunked":
-                content = self.read_chunked_body(s, body_start)
-
-            else:
-                content = body_start
-
-                while True:
-                    chunk = s.recv(4096)
-
-                    if not chunk:
-                        break
-
-                    content += chunk
-
-                browser.connections.pop(self.connection_key(), None)
-                s.close()
-                
-                
-            if content_encoding in ("", "identity"):
-                pass
-            elif content_encoding == "gzip":
-                try: 
-                    content = gzip.decompress(content)
-                except OSError as e:
-                    raise RuntimeError("Invalid gzip response") from e
-            elif content_encoding == "deflate":
-                try:
-                    content = zlib.decompress(content)
-                except zlib.error:
-                    try:
-                        content = zlib.decompress(content, -zlib.MAX_WBITS)
-                    except zlib.error as e:
-                        raise RuntimeError("Invalid deflate response") from e
-            else:
-                raise RuntimeError(f"Unsupported content encoding: {content_encoding}")
-            
-            return content.decode("utf-8", errors = "replace")
-            
-        except (ConnectionError, BrokenPipeError, ConnectionResetError, OSError):
-            browser.connections.pop(self.connection_key(), None)
-            s.close()
-            raise
-    
-def show(body, view_source = False):
-    if view_source:
-        print(body)
-        return
-    in_tag = False
-    text = ""
-    for c in body:
-        if c == "<":
-            in_tag = True
-        elif c == ">":
-            in_tag = False
-        elif not in_tag:
-            text += c
-    print(html.unescape(text))
-    print()
-            
-def load(url, max_redirects = 10):
+def load_page(url, max_redirects = 10):
     redirects_followed = 0
     while True:
         body = url.request()
         
         if url.redirect_url is None:
-            show(body, url.view_source)
-            return
+            break
         
         if redirects_followed >= max_redirects:
             raise RuntimeError(
@@ -297,14 +73,25 @@ def load(url, max_redirects = 10):
         if url.view_source and not next_url.startswith("view-source:"):
             next_url = "view-source:" + next_url
         
-        url = browser(next_url)
+        url = Page(next_url)
+    return url, body
 
+def layout(text):
+    display_list = []
+    cursor_x, cursor_y = HSTEP, VSTEP
+    for c in text:
+        display_list.append((cursor_x, cursor_y, c))
+        cursor_x += HSTEP
+        if cursor_x >= WIDTH - HSTEP:
+            cursor_y += VSTEP
+            cursor_x = HSTEP
+    return display_list
+        
+        
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        load(browser(sys.argv[1]))
-    else:
+    if len(sys.argv) < 2:
         print("Usage: python browser.py <url>")
-        print("Examples:")
-        print(" python browser.py https://example.com")
-        print(" python browser.py file:///path/to/file.html")
         sys.exit(1)
+    browser = Browser()
+    browser.load(Page(sys.argv[1]))
+    tkinter.mainloop()

@@ -296,7 +296,6 @@ def load(url, max_redirects = 10):
             next_url = "view-source:" + next_url
         
         url = Page(next_url)
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         load(Page(sys.argv[1]))
