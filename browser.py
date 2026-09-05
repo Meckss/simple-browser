@@ -7,6 +7,7 @@ from page import Page
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
+PARAGRAPH_STEP = 30
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
@@ -45,6 +46,7 @@ class Browser:
     def load(self, url, max_redirects = 10):
         
         url, body = load_page(url)
+        
         if url.view_source:
             display_text = body
         else:
@@ -80,6 +82,11 @@ def layout(text):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
+        if c == '\n':
+            cursor_y += PARAGRAPH_STEP
+            cursor_x = HSTEP
+            continue
+        
         display_list.append((cursor_x, cursor_y, c))
         cursor_x += HSTEP
         if cursor_x >= WIDTH - HSTEP:
