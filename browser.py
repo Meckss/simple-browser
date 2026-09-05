@@ -1,10 +1,12 @@
 import base64
+import gzip
 import html
 import os
 import socket
 import ssl
 import sys
 import urllib.parse
+import zlib
 
 class browser:
     connections = {}
@@ -96,7 +98,6 @@ class browser:
         content = b""
 
         while True:
-            # Read the chunk-size line.
             while b"\r\n" not in data:
                 chunk = s.recv(4096)
 
@@ -109,7 +110,6 @@ class browser:
             chunk_size = int(size_line.decode("ascii"), 16)
 
             if chunk_size == 0:
-                # Consume the final CRLF.
                 while len(data) < 2:
                     data += s.recv(4096)
 
@@ -125,7 +125,6 @@ class browser:
 
             content += data[:chunk_size]
 
-            # Remove the chunk data and its trailing CRLF.
             data = data[chunk_size + 2:]
         
         
@@ -168,7 +167,8 @@ class browser:
         headers = {
             "Host": self.host,
             "Connection": "keep-alive",
-            "User-Agent": "Mecks"
+            "User-Agent": "Mecks",
+            "Accept-Encoding": "gzip, deflate"
         }
         
         
@@ -196,6 +196,8 @@ class browser:
                 header, value = line.split(":", 1)
                 response_headers[header.casefold()] = value.strip()
                 
+            print("Content-Encoding:", response_headers.get("content-encoding"))
+            
             redirect_statuses = {301, 302, 303, 307, 308}
             
             if status_code in redirect_statuses:
@@ -205,10 +207,9 @@ class browser:
                         self.original_url,
                         location
                     )
-            assert "content-encoding" not in response_headers
 
+            content_encoding = response_headers.get("content-encoding", "").casefold()
             if "content-length" in response_headers:
-                # Read exactly Content-Length bytes.
                 content_length = int(response_headers["content-length"])
                 remaining = content_length - len(body_start)
 
@@ -218,11 +219,9 @@ class browser:
                     content = body_start[:content_length]
 
             elif response_headers.get("transfer-encoding") == "chunked":
-                # Chunked responses do not use Content-Length.
                 content = self.read_chunked_body(s, body_start)
 
             else:
-                # No length information: read until the server closes the socket.
                 content = body_start
 
                 while True:
@@ -233,14 +232,31 @@ class browser:
 
                     content += chunk
 
-                # This socket can no longer be reused.
                 browser.connections.pop(self.connection_key(), None)
                 s.close()
                 
+                
+            if content_encoding in ("", "identity"):
+                pass
+            elif content_encoding == "gzip":
+                try: 
+                    content = gzip.decompress(content)
+                except OSError as e:
+                    raise RuntimeError("Invalid gzip response") from e
+            elif content_encoding == "deflate":
+                try:
+                    content = zlib.decompress(content)
+                except zlib.error:
+                    try:
+                        content = zlib.decompress(content, -zlib.MAX_WBITS)
+                    except zlib.error as e:
+                        raise RuntimeError("Invalid deflate response") from e
+            else:
+                raise RuntimeError(f"Unsupported content encoding: {content_encoding}")
+            
             return content.decode("utf-8", errors = "replace")
             
         except (ConnectionError, BrokenPipeError, ConnectionResetError, OSError):
-            # Remove and close the unusable connection.
             browser.connections.pop(self.connection_key(), None)
             s.close()
             raise
@@ -278,8 +294,8 @@ def load(url, max_redirects = 10):
         redirects_followed += 1
         next_url = url.redirect_url
         
-        if url.view_source and not next_url.startswith("viewsource:"):
-            next_url = "view source:" + next_url
+        if url.view_source and not next_url.startswith("view-source:"):
+            next_url = "view-source:" + next_url
         
         url = browser(next_url)
 
