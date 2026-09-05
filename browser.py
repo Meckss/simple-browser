@@ -10,6 +10,8 @@ class browser:
     connections = {}
     
     def __init__(self, url):
+        self.original_url = url
+        self.redirect_url = None
         self.view_source = False
         self.scheme, url = url.split(":", 1)
         
@@ -186,12 +188,23 @@ class browser:
             status_line = header_lines[0]
             version, status, explanation = status_line.split(" ", 2)
             
+            status_code = int(status)
+            
             response_headers = {}
             
             for line in header_lines[1:]:
                 header, value = line.split(":", 1)
                 response_headers[header.casefold()] = value.strip()
                 
+            redirect_statuses = {301, 302, 303, 307, 308}
+            
+            if status_code in redirect_statuses:
+                location = response_headers.get("location")
+                if location is not None:
+                    self.redirect_url = urllib.parse.urljoin(
+                        self.original_url,
+                        location
+                    )
             assert "content-encoding" not in response_headers
 
             if "content-length" in response_headers:
@@ -248,9 +261,27 @@ def show(body, view_source = False):
     print(html.unescape(text))
     print()
             
-def load(url):
-    body = url.request()
-    show(body, url.view_source)
+def load(url, max_redirects = 10):
+    redirects_followed = 0
+    while True:
+        body = url.request()
+        
+        if url.redirect_url is None:
+            show(body, url.view_source)
+            return
+        
+        if redirects_followed >= max_redirects:
+            raise RuntimeError(
+                f"too many redirects, limit is {max_redirects}"
+            )
+        
+        redirects_followed += 1
+        next_url = url.redirect_url
+        
+        if url.view_source and not next_url.startswith("viewsource:"):
+            next_url = "view source:" + next_url
+        
+        url = browser(next_url)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
