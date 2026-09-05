@@ -1,4 +1,5 @@
 import base64
+import html
 import os
 import socket
 import ssl
@@ -115,13 +116,15 @@ class browser:
     
 def show(body):
     in_tag = False
+    text = ""
     for c in body:
         if c == "<":
             in_tag = True
         elif c == ">":
             in_tag = False
         elif not in_tag:
-            print(c, end= "")
+            text += c
+    print(html.unescape(text))
     print()
             
 def load(url):
