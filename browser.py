@@ -7,6 +7,8 @@ import sys
 import urllib.parse
 
 class browser:
+    connections = {}
+    
     def __init__(self, url):
         self.view_source = False
         self.scheme, url = url.split(":", 1)
@@ -38,6 +40,91 @@ class browser:
             self.host, port = self.host.split(":", 1)
             self.port = int(port)
         self.path = "/" + url
+        
+    def connection_key(self):
+        return self.scheme, self.host, self.port
+    
+    def connect(self):
+        key = self.connection_key()
+        
+        if key in browser.connections:
+            return browser.connections[key]
+        
+        s = socket.socket(
+            family = socket.AF_INET,
+            type = socket.SOCK_STREAM,
+            proto = socket.IPPROTO_TCP
+        )
+        
+        s.connect((self.host, self.port))
+        
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=self.host)
+        
+        browser.connections[key] = s
+        return s
+    
+    def receive_until(self, s, marker):
+        data = b""
+        
+        while marker not in data:
+            chunk = s.recv(4096)
+            
+            if not chunk:
+                raise ConnectionError("Connection closed while reading response")
+            
+            data += chunk
+            
+        return data
+    
+    def receive_exactly(self, s, amount):
+        data = b""
+        
+        while len(data) < amount:
+            chunk = s.recv(amount - len(data))
+        
+            if not chunk:
+                raise ConnectionError("Connection closed while reading body")
+            
+            data += chunk
+        return data
+        
+    def read_chunked_body(self, s, data):
+        content = b""
+
+        while True:
+            # Read the chunk-size line.
+            while b"\r\n" not in data:
+                chunk = s.recv(4096)
+
+                if not chunk:
+                    raise ConnectionError("Connection closed while reading chunk size")
+
+                data += chunk
+
+            size_line, data = data.split(b"\r\n", 1)
+            chunk_size = int(size_line.decode("ascii"), 16)
+
+            if chunk_size == 0:
+                # Consume the final CRLF.
+                while len(data) < 2:
+                    data += s.recv(4096)
+
+                return content
+
+            while len(data) < chunk_size + 2:
+                chunk = s.recv(4096)
+
+                if not chunk:
+                    raise ConnectionError("Connection closed while reading chunk")
+
+                data += chunk
+
+            content += data[:chunk_size]
+
+            # Remove the chunk data and its trailing CRLF.
+            data = data[chunk_size + 2:]
         
         
     def request(self):
@@ -73,21 +160,12 @@ class browser:
             except PermissionError:
                 print(f"Permission denied: {self.path}")
                 sys.exit(1)
-        s = socket.socket(
-            family=socket.AF_INET,
-            type=socket.SOCK_STREAM,
-            proto=socket.IPPROTO_TCP
-        )
-        
-        s.connect((self.host, self.port))
-        
-        if self.scheme == "https":
-            ctx = ssl.create_default_context()
-            s = ctx.wrap_socket(s, server_hostname=self.host)
-        
+                
+        s = self.connect()
+                
         headers = {
             "Host": self.host,
-            "Connection": "close",
+            "Connection": "keep-alive",
             "User-Agent": "Mecks"
         }
         
@@ -97,28 +175,62 @@ class browser:
             request += f"{header}: {value}\r\n"
         request += "\r\n"
         
-        s.send(request.encode("utf8"))
-        
-        response = s.makefile("r", encoding="utf8", newline ="\r\n")
-        
-        statusline = response.readline()
-        version, status, explanation = statusline.split(" ", 2)
+        try:
+            s.sendall(request.encode("utf-8"))
+            
+            raw_response = self.receive_until(s, b"\r\n\r\n")
+            
+            header_data, body_start = raw_response.split(b"\r\n\r\n", 1)
+            header_lines = header_data.decode("iso-8859-1").split("\r\n")
+            
+            status_line = header_lines[0]
+            version, status, explanation = status_line.split(" ", 2)
+            
+            response_headers = {}
+            
+            for line in header_lines[1:]:
+                header, value = line.split(":", 1)
+                response_headers[header.casefold()] = value.strip()
                 
-        response_headers = {}
-        while True:
-            line = response.readline()
-            if line == "\r\n" :
-                break
-            header, value = line.split(":", 1)
-            response_headers[header.casefold()] = value.strip()
-        
-        assert "transfer-encoding" not in response_headers
-        assert "content-encoding" not in response_headers 
-        
-        content = response.read()       
-        s.close()
-        
-        return content
+            assert "content-encoding" not in response_headers
+
+            if "content-length" in response_headers:
+                # Read exactly Content-Length bytes.
+                content_length = int(response_headers["content-length"])
+                remaining = content_length - len(body_start)
+
+                if remaining > 0:
+                    content = body_start + self.receive_exactly(s, remaining)
+                else:
+                    content = body_start[:content_length]
+
+            elif response_headers.get("transfer-encoding") == "chunked":
+                # Chunked responses do not use Content-Length.
+                content = self.read_chunked_body(s, body_start)
+
+            else:
+                # No length information: read until the server closes the socket.
+                content = body_start
+
+                while True:
+                    chunk = s.recv(4096)
+
+                    if not chunk:
+                        break
+
+                    content += chunk
+
+                # This socket can no longer be reused.
+                browser.connections.pop(self.connection_key(), None)
+                s.close()
+                
+            return content.decode("utf-8", errors = "replace")
+            
+        except (ConnectionError, BrokenPipeError, ConnectionResetError, OSError):
+            # Remove and close the unusable connection.
+            browser.connections.pop(self.connection_key(), None)
+            s.close()
+            raise
     
 def show(body, view_source = False):
     if view_source:
