@@ -8,7 +8,13 @@ import urllib.parse
 
 class browser:
     def __init__(self, url):
+        self.view_source = False
         self.scheme, url = url.split(":", 1)
+        
+        if self.scheme == ("view-source"):
+            self.view_source = True
+            self.scheme, url = url.split(":", 1)
+        
         assert self.scheme in ["http", "https", "file", "data"]
             
         if self.scheme == "file":
@@ -114,7 +120,10 @@ class browser:
         
         return content
     
-def show(body):
+def show(body, view_source = False):
+    if view_source:
+        print(body)
+        return
     in_tag = False
     text = ""
     for c in body:
@@ -129,7 +138,7 @@ def show(body):
             
 def load(url):
     body = url.request()
-    show(body)
+    show(body, url.view_source)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

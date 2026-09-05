@@ -11,6 +11,7 @@ local files.
 - HTTP and HTTPS support
 - `file://` scheme for opening local files
 - `data:` scheme for inline HTML and text
+- `view-source` scheme for viewing raw HTML
 - HTTP/1.0 requests
 - Basic HTML tag stripping for text-only rendering
 - Custom `User-Agent` header
