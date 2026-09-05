@@ -122,6 +122,7 @@ def show(body):
             in_tag = False
         elif not in_tag:
             print(c, end= "")
+    print()
             
 def load(url):
     body = url.request()
