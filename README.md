@@ -11,6 +11,7 @@ local files.
 - HTTP and HTTPS support
 - Keep-alive support
 - Redirect support
+- gzip and zlib encoding support
 - `file://` scheme for opening local files
 - `data:` scheme for inline HTML and text
 - `view-source` scheme for viewing raw HTML
