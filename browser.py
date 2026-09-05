@@ -19,8 +19,15 @@ class Browser:
         self.canvas.pack()
         self.display_list = []
         self.scroll = 0
-        self.window.bind("<Down>", self.scrolldown)
         
+        self.window.bind("<Down>", lambda e: self.scroll_page(SCROLL_STEP))
+        self.window.bind("<Up>", lambda e: self.scroll_page(-SCROLL_STEP))
+
+        self.window.bind("<MouseWheel>", self.mouse_scroll)
+
+        self.window.bind("<Button-4>", lambda e: self.scroll_page(-SCROLL_STEP))
+        self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP))   
+             
     def strip_html(self, body):
         body = re.sub(
             r"<(script|style).*?>.*?</\1>",
@@ -32,9 +39,18 @@ class Browser:
         
         return html.unescape(body)
     
-    def scrolldown(self, e):
-        self.scroll += SCROLL_STEP
+    def scroll_page(self, amount):
+        self.scroll += amount
+        self.scroll = max(0, self.scroll)
+        
         self.draw()
+    
+    
+    def mouse_scroll(self, event):
+        if event.delta > 0:
+            self.scroll_page(-SCROLL_STEP)
+        else:
+            self.scroll_page(SCROLL_STEP)
         
     def draw(self):
         self.canvas.delete("all")
