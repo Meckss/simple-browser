@@ -113,18 +113,47 @@ class Browser:
             if y + VSTEP < self.scroll: continue
             self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw")
         self.update_scroll_bar()
+        
+    def show_error(self, title, error):
+        self.text = (
+            f"{title}\n\n"
+            f"{error}\n\n"
+            "Usage:\n"
+            "  python browser.py <url>\n\n"
+            "Supported URLs:\n"
+            "  http://example.com\n"
+            "  https://example.com\n"
+            "  file:///path/to/file\n"
+            "  data:text/plain,Hello"
+        )
+
+        width = self.canvas.winfo_width()
+        if width <= 0:
+            width = WIDTH
+
+        self.display_list = layout(self.text, width)
+        self.scroll = 0
+        self.draw()
 
     def load(self, url):
-        
-        url, body = load_page(url)
-        
-        if url.view_source:
-            self.text = body
-        else:
-            self.text = self.strip_html(body)
-            
-        self.display_list = layout(self.text, self.canvas.winfo_width())
-        self.draw()
+        try:
+            url, body = load_page(Page(url))
+
+            if url.view_source:
+                self.text = body
+            else:
+                self.text = self.strip_html(body)
+
+            width = self.canvas.winfo_width()
+            if width <= 0:
+                width = WIDTH
+
+            self.display_list = layout(self.text, width)
+            self.scroll = 0
+            self.draw()
+
+        except Exception as error:
+            self.show_error("Unable to load page", str(error))
         
         
 def load_page(url, max_redirects = 10):
@@ -171,5 +200,5 @@ if __name__ == "__main__":
         print("Usage: python browser.py <url>")
         sys.exit(1)
     browser = Browser()
-    browser.load(Page(sys.argv[1]))
+    browser.load(sys.argv[1])
     tkinter.mainloop()
