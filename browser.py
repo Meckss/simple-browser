@@ -16,7 +16,13 @@ class Browser:
             width = WIDTH,
             height = HEIGHT
         )
-        self.canvas.pack()
+        self.canvas.pack(side = "left")
+        self.scroll_bar = tkinter.Scrollbar(
+            self.window,
+            orient="vertical",
+            command = self.scroll_bar_scroll
+        )
+        self.scroll_bar.pack(side = "right", fill = "y")
         self.display_list = []
         self.scroll = 0
         
@@ -41,8 +47,7 @@ class Browser:
     
     def scroll_page(self, amount):
         self.scroll += amount
-        self.scroll = max(0, self.scroll)
-        
+        self.scroll = max(0, min(self.scroll, self.max_scroll()))
         self.draw()
     
     
@@ -52,12 +57,49 @@ class Browser:
         else:
             self.scroll_page(SCROLL_STEP)
         
+    def max_scroll(self):
+        if not self.display_list:
+            return 0
+        
+        last_y = self.display_list[-1][1]
+        content_height = last_y + VSTEP
+        
+        return max(0, content_height - HEIGHT)
+    
+    def update_scroll_bar(self):
+        maximum = self.max_scroll()
+        
+        if maximum == 0:
+            self.scroll_bar.set(0,1)
+        else:
+            first = self.scroll / (maximum + HEIGHT)
+            last = (self.scroll + HEIGHT) / (maximum + HEIGHT)
+            self.scroll_bar.set(first, last)
+    
+    def scroll_bar_scroll(self, *args):
+        maximum = self.max_scroll()
+        
+        if args[0] == "moveto":
+            self.scroll = float(args[1]) * (maximum + HEIGHT)
+
+        elif args[0] == "scroll":
+            amount = int(args[1])
+
+            if args[2] == "units":
+                self.scroll += amount * SCROLL_STEP
+            elif args[2] == "pages":
+                self.scroll += amount * HEIGHT
+
+        self.scroll = max(0, min(self.scroll, maximum))
+        self.draw()
+        
     def draw(self):
         self.canvas.delete("all")
         for x, y, c in self.display_list:
             if y > self.scroll + HEIGHT: continue
             if y + VSTEP < self.scroll: continue
             self.canvas.create_text(x,y - self.scroll,text = c)
+        self.update_scroll_bar()
 
     def load(self, url, max_redirects = 10):
         
