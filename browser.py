@@ -16,7 +16,7 @@ class Browser:
             width = WIDTH,
             height = HEIGHT
         )
-        self.canvas.pack(side = "left")
+        self.canvas.pack(side = "left", fill = "both", expand = True)
         self.scroll_bar = tkinter.Scrollbar(
             self.window,
             orient="vertical",
@@ -24,8 +24,10 @@ class Browser:
         )
         self.scroll_bar.pack(side = "right", fill = "y")
         self.display_list = []
+        self.text = ""
         self.scroll = 0
         
+        self.canvas.bind("<Configure>", self.resize)
         self.window.bind("<Down>", lambda e: self.scroll_page(SCROLL_STEP))
         self.window.bind("<Up>", lambda e: self.scroll_page(-SCROLL_STEP))
 
@@ -45,6 +47,14 @@ class Browser:
         
         return html.unescape(body)
     
+    def resize(self, event):
+        if not self.text or event.width <= 0:
+            return
+        
+        self.display_list = layout(self.text, event.width)
+        self.scroll = max(0, min(self.scroll, self.max_scroll()))
+        self.draw()
+        
     def scroll_page(self, amount):
         self.scroll += amount
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
@@ -63,8 +73,9 @@ class Browser:
         
         last_y = self.display_list[-1][1]
         content_height = last_y + VSTEP
+        canvas_height = self.canvas.winfo_height()
         
-        return max(0, content_height - HEIGHT)
+        return max(0, content_height - canvas_height)
     
     def update_scroll_bar(self):
         maximum = self.max_scroll()
@@ -95,22 +106,24 @@ class Browser:
         
     def draw(self):
         self.canvas.delete("all")
+        canvas_height = self.canvas.winfo_height()
+
         for x, y, c in self.display_list:
-            if y > self.scroll + HEIGHT: continue
+            if y > self.scroll + canvas_height: continue
             if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x,y - self.scroll,text = c)
+            self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw")
         self.update_scroll_bar()
 
-    def load(self, url, max_redirects = 10):
+    def load(self, url):
         
         url, body = load_page(url)
         
         if url.view_source:
-            display_text = body
+            self.text = body
         else:
-            display_text = self.strip_html(body)
+            self.text = self.strip_html(body)
             
-        self.display_list = layout(display_text)
+        self.display_list = layout(self.text, self.canvas.winfo_width())
         self.draw()
         
         
@@ -136,7 +149,7 @@ def load_page(url, max_redirects = 10):
         url = Page(next_url)
     return url, body
 
-def layout(text):
+def layout(text, width):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
@@ -147,7 +160,7 @@ def layout(text):
         
         display_list.append((cursor_x, cursor_y, c))
         cursor_x += HSTEP
-        if cursor_x >= WIDTH - HSTEP:
+        if cursor_x >= width - HSTEP:
             cursor_y += VSTEP
             cursor_x = HSTEP
     return display_list
