@@ -27,11 +27,15 @@ class Layout:
     def process_tree(self, tree):
         if isinstance(tree, Text):
             self.process_text(tree)
-        else: 
-            self.process_tag(tree)
-            for child in tree.children:
-                self.process_tree(child)
-            self.process_tag(Element("/" + tree.tag, tree.attributes, tree.parent))
+            return
+
+        if not tree.is_rendered():
+            return
+
+        self.process_tag(tree)
+        for child in tree.children:
+            self.process_tree(child)
+        self.process_tag(Element("/" + tree.tag, tree.attributes, tree.parent))
                 
     def process_text(self, text):
         content = re.sub(r"\s+", " ", text.text)

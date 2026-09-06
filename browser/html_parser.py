@@ -1,4 +1,5 @@
 import html
+import re
 
 from .text import Text
 from .element import Element
@@ -15,6 +16,8 @@ HEAD_TAGS = [
     "link", "meta", "title", "style", "script",
 ]
 
+RAW_TEXT_TAGS = {"script", "style"}
+
 class HTMLParser:
     def __init__(self, body):
         self.body = body
@@ -23,7 +26,23 @@ class HTMLParser:
     def parse_html(self):
         buffer = ""
         in_tag = False
-        for c in self.body:
+        i = 0
+        while i < len(self.body):
+            if not in_tag and self.unfinished and \
+                    self.unfinished[-1].tag in RAW_TEXT_TAGS:
+                raw_tag = self.unfinished[-1].tag
+                closing = re.search(
+                    rf"</{raw_tag}\s*>", self.body[i:], re.IGNORECASE
+                )
+                if closing is None:
+                    break
+                i += closing.start()
+                buffer = ""
+                self.add_tag("/" + raw_tag)
+                i += closing.end() - closing.start()
+                continue
+
+            c = self.body[i]
             if c == "<":
                 in_tag = True
                 if buffer:
@@ -35,6 +54,7 @@ class HTMLParser:
                 buffer = ""
             else:
                 buffer += c
+            i += 1
         
         if buffer:
             if in_tag:
