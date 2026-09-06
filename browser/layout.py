@@ -1,6 +1,6 @@
 import re
-import tkinter.font
 
+from .font import FontCache
 from .style_state import StyleState
 from .text import Text
 
@@ -13,7 +13,7 @@ class Layout:
         self.width = width
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP
-        self.fonts = {}
+        self.fonts = FontCache()
         self.style = StyleState()
         self.line =[]
         
@@ -86,13 +86,4 @@ class Layout:
             self.cursor_y += PARAGRAPH_STEP
     
     def get_font(self):
-        key = self.style.key()
-
-        if key not in self.fonts:
-            self.fonts[key] = tkinter.font.Font(
-                size=self.style.size,
-                weight=self.style.weight,
-                slant=self.style.slant,
-            )
-
-        return self.fonts[key]
+        return self.fonts.get(self.style)

@@ -1,5 +1,4 @@
 import tkinter
-import tkinter.font
 import re
 
 from .page import Page
@@ -121,7 +120,7 @@ class Browser:
         for x, y, c, f in self.layout.display_list:
             if y > self.scroll + canvas_height: continue
             if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw", font=f)
+            self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw", font=f.tk_font)
         self.update_scroll_bar()
         
     def show_error(self, title, error):
