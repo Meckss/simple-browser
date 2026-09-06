@@ -1,8 +1,7 @@
 import tkinter
-import re
 
 from .page import Page
-from .layout import Layout
+from .document_layout import DocumentLayout
 from .html_parser import HTMLParser
 
 WIDTH, HEIGHT = 800, 600
@@ -52,8 +51,9 @@ class Browser:
         self.draw()
 
     def make_layout(self, body, width):
-        tree = HTMLParser(body).parse_html()
-        self.layout = Layout(tree, width)
+        root = HTMLParser(body).parse_html()
+        self.layout = DocumentLayout(root, width)
+        self.layout.layout()
     
     def resize(self, event):
         if event.width <= 0 or not self.text:
@@ -80,7 +80,7 @@ class Browser:
         
         canvas_height = self.canvas.winfo_height()
         
-        return max(0, self.layout.content_height - canvas_height)
+        return max(0, self.layout.height - canvas_height)
     
     def update_scroll_bar(self):
         canvas_height = self.canvas.winfo_height()
