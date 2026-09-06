@@ -3,14 +3,14 @@ import tkinter.font
 
 from .style import Style
 from .text import Text
-from .tag import Tag
+from .element import Element
 
 WIDTH = 800
 HSTEP, VSTEP = 13, 18
 PARAGRAPH_STEP = 30
     
 class Layout:
-    def __init__(self, tokens, width):
+    def __init__(self, tree, width):
         self.display_list = []
         self.width = width
         self.cursor_x = HSTEP
@@ -19,18 +19,19 @@ class Layout:
         self.style = Style()
         self.line =[]
         
-        for token in tokens:
-            self.process_token(token)
+        self.process_tree(tree)
             
         self.flush()
         self.content_height = self.cursor_y + VSTEP
         
-    def process_token(self, token):
-        if isinstance(token, Text):
-            self.process_text(token)
-                    
-        elif isinstance(token, Tag):
-            self.process_tag(token)
+    def process_tree(self, tree):
+        if isinstance(tree, Text):
+            self.process_text(tree)
+        else: 
+            self.process_tag(tree)
+            for child in tree.children:
+                self.process_tree(child)
+            self.process_tag(Element("/" + tree.tag, tree.attributes, tree.parent))
                 
     def process_text(self, text):
         content = re.sub(r"\s+", " ", text.text)

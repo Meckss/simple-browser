@@ -4,7 +4,7 @@ import re
 
 from .page import Page
 from .layout import Layout
-from .parser import parse_html
+from .html_parser import HTMLParser
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
@@ -53,8 +53,8 @@ class Browser:
         self.draw()
 
     def make_layout(self, body, width):
-        tokens = parse_html(body)
-        self.layout = Layout(tokens, width)
+        tree = HTMLParser(body).parse_html()
+        self.layout = Layout(tree, width)
     
     def resize(self, event):
         if event.width <= 0 or not self.text:
