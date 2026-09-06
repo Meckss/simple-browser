@@ -1,3 +1,5 @@
+import html
+
 from .text import Text
 from .tag import Tag
 
@@ -9,7 +11,7 @@ def parse_html(body):
         if c == "<":
             in_tag = True
             if buffer: 
-                tokens.append(Text(buffer))
+                tokens.append(Text(html.unescape(buffer)))
             buffer = ""
         elif c == ">":
             in_tag = False

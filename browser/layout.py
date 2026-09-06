@@ -33,26 +33,22 @@ class Layout:
             self.process_tag(token)
                 
     def process_text(self, text):
-        for part in re.split(r"(\n+)", text.text):
-            if part.startswith("\n"):
+        content = re.sub(r"\s+", " ", text.text)
+
+        for word in content.split():
+            font = self.get_font()
+            word_width = font.measure(word)
+            space_width = font.measure(" ")
+
+            required_width = word_width
+            if self.line:
+                required_width += space_width
+
+            if self.cursor_x + required_width > self.width - HSTEP:
                 self.flush()
-                if len(part) >= 2:
-                    self.cursor_y += PARAGRAPH_STEP
-                else:
-                    self.cursor_y += VSTEP
 
-                self.cursor_x = HSTEP
-                continue
-            
-            for word in part.split():
-                font = self.get_font()
-                word_width = font.measure(word)
-
-                if self.cursor_x + word_width >= self.width - HSTEP:
-                    self.flush()
-
-                self.line.append((self.cursor_x, word, font))
-                self.cursor_x += word_width + font.measure(" ")
+            self.line.append((self.cursor_x, word, font))
+            self.cursor_x += word_width + space_width
                     
     def flush(self):
         if not self.line: return

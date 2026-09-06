@@ -57,7 +57,7 @@ class Browser:
         self.layout = Layout(tokens, width)
     
     def resize(self, event):
-        if event.width <= 0:
+        if event.width <= 0 or not self.text:
             return
         self.make_layout(self.text, event.width)
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
