@@ -4,7 +4,10 @@ import sys
 import html
 import re
 
+from tag import Tag
+from text import Text
 from page import Page
+
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
@@ -25,8 +28,8 @@ class Browser:
         )
         self.scroll_bar.pack(side = "right", fill = "y")
         self.display_list = []
-        self.text = ""
         self.scroll = 0
+        self.text = ""
         
         self.canvas.bind("<Configure>", self.resize)
         self.window.bind("<Down>", lambda e: self.scroll_page(SCROLL_STEP))
@@ -51,7 +54,7 @@ class Browser:
 
     
     def resize(self, event):
-        if not self.text or event.width <= 0:
+        if event.width <= 0:
             return
         
         self.display_list = layout(self.text, event.width)
@@ -111,10 +114,10 @@ class Browser:
         self.canvas.delete("all")
         canvas_height = self.canvas.winfo_height()
 
-        for x, y, c in self.display_list:
+        for x, y, c, f in self.display_list:
             if y > self.scroll + canvas_height: continue
             if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw")
+            self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw", font=f)
         self.update_scroll_bar()
         
     def show_error(self, title, error):
@@ -137,21 +140,18 @@ class Browser:
         self.display_list = layout(self.text, width)
         self.scroll = 0
         self.draw()
-
+    
     def load(self, url):
         try:
             url, body = load_page(Page(url))
 
-            if url.view_source:
-                self.text = body
-            else:
-                self.text = self.strip_html(body)
-
+            self.text = body
+            
             width = self.canvas.winfo_width()
             if width <= 0:
                 width = WIDTH
 
-            self.display_list = layout(self.text, width)
+            self.display_list = layout(body, width)
             self.scroll = 0
             self.draw()
 
@@ -182,26 +182,72 @@ def load_page(url, max_redirects = 10):
     return url, body
 
 def layout(text, width):
-    font = tkinter.font.Font()
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
-    tokens = re.findall(r"\n|[^\s]+", text)
+    tokens = process_body(text)
+    weight = "normal"
+    style = "roman"
     for token in tokens:
-        if token == "\n":
-            cursor_y += PARAGRAPH_STEP
-            cursor_x = HSTEP
-            continue
+        if isinstance(token, Text):
+            for part in re.split(r"(\n+)", token.text):
+                if part.startswith("\n"):
+                    if part == "\n\n":
+                        cursor_y += PARAGRAPH_STEP
+                    else:
+                        cursor_y += VSTEP
 
-        word_width = font.measure(token)
+                    cursor_x = HSTEP
+                    continue
+                
+                for word in part.split():
+                    font = tkinter.font.Font(
+                        size = 16,
+                        weight = weight,
+                        slant = style
+                    )
+                    word_width = font.measure(word)
 
-        if cursor_x + word_width >= width - HSTEP:
-            cursor_y += font.metrics("linespace") * 1.25
-            cursor_x = HSTEP
+                    if cursor_x + word_width >= width - HSTEP:
+                        cursor_y += font.metrics("linespace") * 1.25
+                        cursor_x = HSTEP
 
-        display_list.append((cursor_x, cursor_y, token))
-        cursor_x += word_width + font.measure(" ")
+                    display_list.append((cursor_x, cursor_y, word, font))
+                    cursor_x += word_width + font.measure(" ")
+                    
+        if isinstance(token, Tag):
+            if token.tag == "i":
+                style = "italic"
+            elif token.tag == "/i":
+                style = "roman"
+            elif token.tag == "b":
+                weight = "bold"
+            elif token.tag == "/b":
+                weight = "normal"
+                
 
     return display_list
+
+def process_body(body):
+    out = []
+    buffer = ""
+    in_tag = False
+    for c in body:
+        if c == "<":
+            in_tag = True
+            if buffer: 
+                out.append(Text(buffer))
+            buffer = ""
+        elif c == ">":
+            in_tag = False
+            out.append(Tag(buffer))
+            buffer = ""
+        else: 
+            buffer += c
+    
+    if not in_tag and buffer:
+        out.append(Text(buffer))
+    
+    return out
         
         
 if __name__ == "__main__":
