@@ -1,9 +1,9 @@
 import re
 import tkinter.font
 
-from style import Style
-from text import Text
-from tag import Tag
+from .style import Style
+from .text import Text
+from .tag import Tag
 
 WIDTH = 800
 HSTEP, VSTEP = 13, 18

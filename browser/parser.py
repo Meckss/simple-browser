@@ -1,5 +1,5 @@
-from text import Text
-from tag import Tag
+from .text import Text
+from .tag import Tag
 
 def parse_html(body):
     tokens = []

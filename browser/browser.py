@@ -1,11 +1,10 @@
 import tkinter
 import tkinter.font
-import sys
 import re
 
-from page import Page
-from layout import Layout
-from parser import parse_html
+from .page import Page
+from .layout import Layout
+from .parser import parse_html
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
@@ -170,11 +169,3 @@ def load_page(page, max_redirects = 10):
         
         page = Page(next_page)
     return page, body
-        
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python browser.py <url>")
-        sys.exit(1)
-    browser = Browser()
-    browser.load(sys.argv[1])
-    tkinter.mainloop()
