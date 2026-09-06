@@ -2,6 +2,7 @@ class Style:
     def __init__(self):
         self.weight = "normal"
         self.slant = "roman"
+        self.size = 16
 
     def apply(self, tag):
         if tag.tag == "i":
@@ -12,3 +13,11 @@ class Style:
             self.weight = "bold"
         elif tag.tag == "/b":
             self.weight = "normal"
+        elif tag.tag == "small":
+            self.size -= 2
+        elif tag.tag == "/small":
+            self.size += 2
+        elif tag.tag == "big":
+            self.size += 4
+        elif tag.tag == "/big":
+            self.size -= 4

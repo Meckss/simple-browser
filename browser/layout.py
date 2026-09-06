@@ -56,11 +56,11 @@ class Layout:
         self.style.apply(tag)
     
     def get_font(self):
-        key = (self.style.weight, self.style.slant)
+        key = (self.style.weight, self.style.slant, self.style.size)
 
         if key not in self.fonts:
             self.fonts[key] = tkinter.font.Font(
-                size=16,
+                size=self.style.size,
                 weight=self.style.weight,
                 slant=self.style.slant,
             )
