@@ -8,6 +8,8 @@ SELF_CLOSING_TAGS = [
     "link", "meta", "param", "source", "track", "wbr",
 ]
 
+IMPLICITLY_CLOSED_BY_SAME_TAG = {"p", "li"}
+
 HEAD_TAGS = [
     "base", "basefont", "bgsound", "noscript",
     "link", "meta", "title", "style", "script",
@@ -38,7 +40,7 @@ class HTMLParser:
             if in_tag:
                 self.add_text(("<" + buffer))
             else:
-                self.add_tag(buffer)
+                self.add_text(buffer)
                 
         return self.finish()
         
@@ -126,17 +128,41 @@ class HTMLParser:
             open_tags = [node.tag for node in self.unfinished]
             if open_tags == [] and tag != "html":
                 self.add_tag("html")
-            elif open_tags == ["html"] \
-                and tag not in ["head", "body", "/html"]:
+            elif open_tags == ["html"] and tag not in ["head", "body", "/html"]:
                     if tag in HEAD_TAGS:
                         self.add_tag("head")
                     else:
                         self.add_tag("body")
             elif open_tags == ["html", "head"] and \
                 tag not in ["head", "/head"] + HEAD_TAGS:
-                    self.add_tag("/head")
+                self.add_tag("/head")
+            elif self.should_implicitly_close(tag, open_tags):
+                self.close_open_tag(tag)
             else:
                 break
+
+    def close_open_tag(self, tag):
+        while self.unfinished:
+            node = self.unfinished.pop()
+            parent = self.unfinished[-1] if self.unfinished else None
+            if parent is not None:
+                parent.children.append(node)
+            if node.tag == tag:
+                return
+
+    def should_implicitly_close(self, tag, open_tags):
+        if tag == "p":
+            return "p" in open_tags
+        if tag == "li":
+            if "li" not in open_tags:
+                return False
+            last_li = len(open_tags) - 1 - open_tags[::-1].index("li")
+            list_indexes = [
+                index for index, open_tag in enumerate(open_tags)
+                if open_tag in ("ul", "ol")
+            ]
+            return not list_indexes or last_li > max(list_indexes)
+        return False
     
 def print_tree(node, indent = 0):
     print(" " * indent, node)
