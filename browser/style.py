@@ -5,19 +5,36 @@ class Style:
         self.size = 16
 
     def apply(self, tag):
-        if tag.tag == "i":
-            self.slant = "italic"
-        elif tag.tag == "/i":
-            self.slant = "roman"
-        elif tag.tag == "b":
-            self.weight = "bold"
-        elif tag.tag == "/b":
-            self.weight = "normal"
-        elif tag.tag == "small":
-            self.size -= 2
-        elif tag.tag == "/small":
-            self.size += 2
-        elif tag.tag == "big":
-            self.size += 4
-        elif tag.tag == "/big":
-            self.size -= 4
+        styles = {
+            "i": self.enable_italic,
+            "/i": self.disable_italic,
+            "b": self.enable_bold,
+            "/b": self.disable_bold,
+            "small": self.make_smaller,
+            "/small": self.make_larger,
+            "big": self.make_larger,
+            "/big": self.make_smaller,
+        }
+
+        action = styles.get(tag.tag)
+
+        if action:
+            action()
+
+    def enable_italic(self):
+        self.slant = "italic"
+
+    def disable_italic(self):
+        self.slant = "roman"
+
+    def enable_bold(self):
+        self.weight = "bold"
+
+    def disable_bold(self):
+        self.weight = "normal"
+
+    def make_smaller(self):
+        self.size -= 2
+
+    def make_larger(self):
+        self.size += 2

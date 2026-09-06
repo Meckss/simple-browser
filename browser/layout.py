@@ -22,8 +22,8 @@ class Layout:
         for token in tokens:
             self.process_token(token)
             
-        self.content_height = self.cursor_y + VSTEP
         self.flush()
+        self.content_height = self.cursor_y + VSTEP
         
     def process_token(self, token):
         if isinstance(token, Text):
@@ -35,6 +35,7 @@ class Layout:
     def process_text(self, text):
         for part in re.split(r"(\n+)", text.text):
             if part.startswith("\n"):
+                self.flush()
                 if len(part) >= 2:
                     self.cursor_y += PARAGRAPH_STEP
                 else:
@@ -73,6 +74,14 @@ class Layout:
     
     def process_tag(self, tag):
         self.style.apply(tag)
+        
+        if tag.tag == "br":
+            self.flush()
+            self.cursor_y += VSTEP
+        
+        elif tag.tag == "/p":
+            self.flush()
+            self.cursor_y += PARAGRAPH_STEP
     
     def get_font(self):
         key = (self.style.weight, self.style.slant, self.style.size)
