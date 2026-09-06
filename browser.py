@@ -7,11 +7,12 @@ import re
 from tag import Tag
 from text import Text
 from page import Page
+from layout import Layout
 
 WIDTH, HEIGHT = 800, 600
-HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
-PARAGRAPH_STEP = 30
+HSTEP, VSTEP = 13, 18
+
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
@@ -30,6 +31,7 @@ class Browser:
         self.display_list = []
         self.scroll = 0
         self.text = ""
+        self.layout = None
         
         self.canvas.bind("<Configure>", self.resize)
         self.window.bind("<Down>", lambda e: self.scroll_page(SCROLL_STEP))
@@ -52,12 +54,15 @@ class Browser:
         body = re.sub(r"\n\s*\n+", "\n\n", body)
         return body
 
+    def make_layout(self, body, width):
+        tokens = process_body(body)
+        self.layout = Layout(tokens, width)
     
     def resize(self, event):
         if event.width <= 0:
             return
-        
-        self.display_list = layout(self.text, event.width)
+        self.make_layout(self.text, event.width)
+        self.display_list = self.layout.display_list
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
         self.draw()
         
@@ -74,14 +79,12 @@ class Browser:
             self.scroll_page(SCROLL_STEP)
         
     def max_scroll(self):
-        if not self.display_list:
+        if not hasattr(self, "layout"):
             return 0
         
-        last_y = self.display_list[-1][1]
-        content_height = last_y + VSTEP
         canvas_height = self.canvas.winfo_height()
         
-        return max(0, content_height - canvas_height)
+        return max(0, self.layout.content_height - canvas_height)
     
     def update_scroll_bar(self):
         maximum = self.max_scroll()
@@ -137,7 +140,8 @@ class Browser:
         if width <= 0:
             width = WIDTH
 
-        self.display_list = layout(self.text, width)
+        self.make_layout(self.text, width)
+        self.display_list = self.layout.display_list
         self.scroll = 0
         self.draw()
     
@@ -151,7 +155,8 @@ class Browser:
             if width <= 0:
                 width = WIDTH
 
-            self.display_list = layout(body, width)
+            self.make_layout(body,width)
+            self.display_list = self.layout.display_list
             self.scroll = 0
             self.draw()
 
@@ -180,52 +185,6 @@ def load_page(url, max_redirects = 10):
         
         url = Page(next_url)
     return url, body
-
-def layout(text, width):
-    display_list = []
-    cursor_x, cursor_y = HSTEP, VSTEP
-    tokens = process_body(text)
-    weight = "normal"
-    style = "roman"
-    for token in tokens:
-        if isinstance(token, Text):
-            for part in re.split(r"(\n+)", token.text):
-                if part.startswith("\n"):
-                    if part == "\n\n":
-                        cursor_y += PARAGRAPH_STEP
-                    else:
-                        cursor_y += VSTEP
-
-                    cursor_x = HSTEP
-                    continue
-                
-                for word in part.split():
-                    font = tkinter.font.Font(
-                        size = 16,
-                        weight = weight,
-                        slant = style
-                    )
-                    word_width = font.measure(word)
-
-                    if cursor_x + word_width >= width - HSTEP:
-                        cursor_y += font.metrics("linespace") * 1.25
-                        cursor_x = HSTEP
-
-                    display_list.append((cursor_x, cursor_y, word, font))
-                    cursor_x += word_width + font.measure(" ")
-                    
-        if isinstance(token, Tag):
-            if token.tag == "i":
-                style = "italic"
-            elif token.tag == "/i":
-                style = "roman"
-            elif token.tag == "b":
-                weight = "bold"
-            elif token.tag == "/b":
-                weight = "normal"
-                
-
-    return display_list
 
 def process_body(body):
     out = []
