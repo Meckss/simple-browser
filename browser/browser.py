@@ -48,6 +48,8 @@ class Browser:
         if reset_scroll:
             self.scroll = 0
 
+        self.display_list = []
+        paint_tree(self.layout, self.display_list)
         self.draw()
 
     def make_layout(self, body, width):
@@ -60,6 +62,8 @@ class Browser:
             return
         self.make_layout(self.text, event.width)
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
+        self.display_list = []
+        paint_tree(self.layout, self.display_list)
         self.draw()
         
     def scroll_page(self, amount):
@@ -117,7 +121,7 @@ class Browser:
         self.canvas.delete("all")
         canvas_height = self.canvas.winfo_height()
 
-        for x, y, c, f in self.layout.display_list:
+        for x, y, c, f in self.display_list:
             if y > self.scroll + canvas_height: continue
             if y + VSTEP < self.scroll: continue
             self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw", font=f.tk_font)
@@ -168,3 +172,9 @@ def load_page(page, max_redirects = 10):
         
         page = Page(next_page)
     return page, body
+
+def paint_tree(layout_object, display_list):
+    display_list.extend(layout_object.paint())
+    
+    for child in layout_object.children:
+        paint_tree(child, display_list)

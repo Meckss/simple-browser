@@ -28,7 +28,6 @@ class BlockLayout:
         self.fonts = None
         self.style = None
         self.line =[]
-        self.content_height = 0
         self.x = None
         self.y = None
         self.width = None
@@ -44,13 +43,6 @@ class BlockLayout:
         if self.node.children:
             return "inline"
         return "block"
-        
-    def layout_intermediate(self):
-        previous = None
-        for child in self.node.children:
-            next_child = BlockLayout(child, self, previous)
-            self.children.append(next_child)
-            previous = next_child
         
     def layout(self):
         self.x = self.parent.x
@@ -68,9 +60,7 @@ class BlockLayout:
                 next_child.layout()
                 previous = next_child
             self.height = sum([child.height for child in self.children])
-            self.display_list = []
-            for child in self.children:
-                self.display_list.extend(child.display_list)
+
         else: 
             self.cursor_x = 0
             self.cursor_y = 0
@@ -82,7 +72,9 @@ class BlockLayout:
                 
             self.flush()
             self.height = self.cursor_y
-            self.content_height = self.cursor_y + VSTEP
+            
+    def paint(self):
+        return self.display_list
             
     def process_tree(self, tree):
         if isinstance(tree, Text):
