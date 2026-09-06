@@ -1,11 +1,9 @@
 import re
 import tkinter.font
 
-from .style import Style
+from .style_state import StyleState
 from .text import Text
-from .element import Element
 
-WIDTH = 800
 HSTEP, VSTEP = 13, 18
 PARAGRAPH_STEP = 30
     
@@ -16,7 +14,7 @@ class Layout:
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP
         self.fonts = {}
-        self.style = Style()
+        self.style = StyleState()
         self.line =[]
         
         self.process_tree(tree)
@@ -32,10 +30,10 @@ class Layout:
         if not tree.is_rendered():
             return
 
-        self.process_tag(tree)
+        self.enter_tag(tree)
         for child in tree.children:
             self.process_tree(child)
-        self.process_tag(Element("/" + tree.tag, tree.attributes, tree.parent))
+        self.exit_tag(tree)
                 
     def process_text(self, text):
         content = re.sub(r"\s+", " ", text.text)
@@ -73,19 +71,22 @@ class Layout:
         self.line = []
 
     
-    def process_tag(self, tag):
-        self.style.apply(tag)
-        
+    def enter_tag(self, tag):
+        self.style.enter(tag.tag)
+
         if tag.tag == "br":
             self.flush()
             self.cursor_y += VSTEP
-        
-        elif tag.tag == "/p":
+
+    def exit_tag(self, tag):
+        self.style.exit(tag.tag)
+
+        if tag.tag == "p":
             self.flush()
             self.cursor_y += PARAGRAPH_STEP
     
     def get_font(self):
-        key = (self.style.weight, self.style.slant, self.style.size)
+        key = self.style.key()
 
         if key not in self.fonts:
             self.fonts[key] = tkinter.font.Font(

@@ -9,7 +9,6 @@ class Element:
         self.children = []
 
     def is_rendered(self):
-        """Return whether this element participates in visual rendering."""
         return self.tag not in NON_RENDERING_TAGS
         
     def __repr__(self):

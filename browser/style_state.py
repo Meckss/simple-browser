@@ -1,25 +1,34 @@
-class Style:
+class StyleState:
+
     def __init__(self):
         self.weight = "normal"
         self.slant = "roman"
         self.size = 16
 
-    def apply(self, tag):
-        styles = {
+    def enter(self, tag_name):
+        actions = {
             "i": self.enable_italic,
-            "/i": self.disable_italic,
             "b": self.enable_bold,
-            "/b": self.disable_bold,
             "small": self.make_smaller,
-            "/small": self.make_larger,
             "big": self.make_larger,
-            "/big": self.make_smaller,
         }
-
-        action = styles.get(tag.tag)
-
+        action = actions.get(tag_name)
         if action:
             action()
+
+    def exit(self, tag_name):
+        actions = {
+            "i": self.disable_italic,
+            "b": self.disable_bold,
+            "small": self.make_larger,
+            "big": self.make_smaller,
+        }
+        action = actions.get(tag_name)
+        if action:
+            action()
+
+    def key(self):
+        return self.weight, self.slant, self.size
 
     def enable_italic(self):
         self.slant = "italic"
