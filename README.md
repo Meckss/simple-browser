@@ -29,17 +29,17 @@ local files.
 Open a website:
 
 ```bash
-python browser.py https://example.com
+python main.py https://example.com
 ``` 
 
 ## How to Run
 
 ```bash
 # Open a website
-python browser.py https://example.com
+python main.py https://example.com
 
 # Open a local file
-python browser.py file:///path/to/your/file.html
+python main.py file:///path/to/your/file.html
 ```
 
 ## Acknowledgments
