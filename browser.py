@@ -1,4 +1,5 @@
 import tkinter
+import tkinter.font
 import sys
 import html
 import re
@@ -44,8 +45,10 @@ class Browser:
             flags=re.DOTALL | re.IGNORECASE
         )
         body = re.sub(r"<[^>]*>", "", body)
-        
-        return html.unescape(body)
+        body =  html.unescape(body)
+        body = re.sub(r"\n\s*\n+", "\n\n", body)
+        return body
+
     
     def resize(self, event):
         if not self.text or event.width <= 0:
@@ -179,19 +182,25 @@ def load_page(url, max_redirects = 10):
     return url, body
 
 def layout(text, width):
+    font = tkinter.font.Font()
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
-    for c in text:
-        if c == '\n':
+    tokens = re.findall(r"\n|[^\s]+", text)
+    for token in tokens:
+        if token == "\n":
             cursor_y += PARAGRAPH_STEP
             cursor_x = HSTEP
             continue
-        
-        display_list.append((cursor_x, cursor_y, c))
-        cursor_x += HSTEP
-        if cursor_x >= width - HSTEP:
-            cursor_y += VSTEP
+
+        word_width = font.measure(token)
+
+        if cursor_x + word_width >= width - HSTEP:
+            cursor_y += font.metrics("linespace") * 1.25
             cursor_x = HSTEP
+
+        display_list.append((cursor_x, cursor_y, token))
+        cursor_x += word_width + font.measure(" ")
+
     return display_list
         
         

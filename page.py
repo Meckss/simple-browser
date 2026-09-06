@@ -1,6 +1,6 @@
 import base64
+import binascii
 import gzip
-import html
 import os
 import socket
 import ssl
@@ -15,13 +15,19 @@ class Page:
         self.original_url = url
         self.redirect_url = None
         self.view_source = False
-        self.scheme, url = url.split(":", 1)
+        try:
+            self.scheme, url = url.split(":", 1)
+        except ValueError:
+            raise ValueError(
+                f"Invalid URL: {url!r}. Expected a URL such as https://example.com"
+            )
         
         if self.scheme == ("view-source"):
             self.view_source = True
             self.scheme, url = url.split(":", 1)
         
-        assert self.scheme in ["http", "https", "file", "data"]
+        if self.scheme not in ["http", "https", "file", "data"]:
+            raise ValueError(f"Unsupported URL scheme: {self.scheme!r}")
             
         if self.scheme == "file":
             self.path = os.path.abspath(url)
@@ -132,17 +138,15 @@ class Page:
         if self.scheme == "data":
             try:
                 metadata, data = self.data.split(",", 1)
-            except ValueError:
-                print("Invalid data URL")
-                sys.exit(1)
+            except ValueError as error:
+                raise ValueError("Invalid data URL: missing comma") from error
             
             is_base64 = metadata.endswith(";base64")
             if is_base64:
                 try:
                     content = base64.b64decode(data)
-                except ValueError:
-                    print("Invalid base64 data URL")
-                    sys.exit(1)
+                except (ValueError, binascii.Error) as error:
+                    raise ValueError("Invalid base64 data URL") from error
             else:
                 content = urllib.parse.unquote_to_bytes(data)
             try:
@@ -155,12 +159,14 @@ class Page:
             try:
                 with open(self.path, "r", encoding="utf8") as f:
                     return f.read()
-            except FileNotFoundError:
-                print(f"File not found: {self.path}")
-                sys.exit(1)
-            except PermissionError:
-                print(f"Permission denied: {self.path}")
-                sys.exit(1)
+            except FileNotFoundError as error:
+                raise FileNotFoundError(
+                    f"File not found: {self.path}"
+                ) from error
+            except PermissionError as error:
+                raise PermissionError(
+                    f"Permission denied: {self.path}"
+                ) from error
                 
         s = self.connect()
                 
@@ -258,50 +264,3 @@ class Page:
             Page.connections.pop(self.connection_key(), None)
             s.close()
             raise
-    
-def show(body, view_source = False):
-    if view_source:
-        print(body)
-        return
-    in_tag = False
-    text = ""
-    for c in body:
-        if c == "<":
-            in_tag = True
-        elif c == ">":
-            in_tag = False
-        elif not in_tag:
-            text += c
-    print(html.unescape(text))
-    print()
-            
-def load(url, max_redirects = 10):
-    redirects_followed = 0
-    while True:
-        body = url.request()
-        
-        if url.redirect_url is None:
-            show(body, url.view_source)
-            return
-        
-        if redirects_followed >= max_redirects:
-            raise RuntimeError(
-                f"too many redirects, limit is {max_redirects}"
-            )
-        
-        redirects_followed += 1
-        next_url = url.redirect_url
-        
-        if url.view_source and not next_url.startswith("view-source:"):
-            next_url = "view-source:" + next_url
-        
-        url = Page(next_url)
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        load(Page(sys.argv[1]))
-    else:
-        print("Usage: python Page.py <url>")
-        print("Examples:")
-        print(" python page.py https://example.com")
-        print(" python page.py file:///path/to/file.html")
-        sys.exit(1)
