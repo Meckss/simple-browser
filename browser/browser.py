@@ -8,6 +8,7 @@ from .html_parser import HTMLParser
 from .style import style
 from .css_parser import CSSParser
 from .tree_utils import tree_to_list
+from .selector import cascade_priority
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
@@ -79,7 +80,7 @@ class Browser:
             except:
                 continue
             rules.extend(CSSParser(body).parse())        
-        style(root, rules)
+        style(root, sorted(rules, key = cascade_priority))
         self.layout = DocumentLayout(root, width)
         self.layout.layout()
     

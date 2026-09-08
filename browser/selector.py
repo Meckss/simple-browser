@@ -14,6 +14,7 @@ class TagSelector:
             tag: The tag name to match, such as ``"p"`` or ``"div"``.
         """
         self.tag = tag
+        self.priority = 1
         
     def matches(self, node):
         """Return whether ``node`` is an element with the selected tag.
@@ -39,6 +40,7 @@ class DescendantSelector:
         """
         self.ancestor = ancestor
         self.descendant = descendant
+        self.priority = ancestor.priority + descendant.priority
         
     def matches(self, node):
         """Return whether ``node`` matches below the selected ancestor.
@@ -59,3 +61,7 @@ class DescendantSelector:
                 return True
             node = node.parent
         return False
+
+def cascade_priority(rule):
+    selector, _ = rule
+    return selector.priority
