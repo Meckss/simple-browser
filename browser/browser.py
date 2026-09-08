@@ -3,6 +3,7 @@ import tkinter
 from .page import Page
 from .document_layout import DocumentLayout
 from .html_parser import HTMLParser
+from .style import style
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
@@ -54,6 +55,7 @@ class Browser:
 
     def make_layout(self, body, width):
         root = HTMLParser(body).parse_html()
+        style(root)
         self.layout = DocumentLayout(root, width)
         self.layout.layout()
     
@@ -121,10 +123,10 @@ class Browser:
         self.canvas.delete("all")
         canvas_height = self.canvas.winfo_height()
 
-        for x, y, c, f in self.display_list:
-            if y > self.scroll + canvas_height: continue
-            if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x,y - self.scroll,text = c, anchor = "nw", font=f.tk_font)
+        for cmd in self.display_list:
+            if cmd.top > self.scroll + canvas_height: continue
+            if cmd.bottom < self.scroll: continue
+            cmd.execute(self.scroll, self.canvas)
         self.update_scroll_bar()
         
     def show_error(self, title, error):

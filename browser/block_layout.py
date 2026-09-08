@@ -4,6 +4,8 @@ from .font import FontCache
 from .style_state import StyleState
 from .text import Text
 from .element import Element
+from .draw import DrawRect
+from .draw import DrawText
 
 HSTEP, VSTEP = 13, 18
 PARAGRAPH_STEP = 30
@@ -74,7 +76,17 @@ class BlockLayout:
             self.height = self.cursor_y
             
     def paint(self):
-        return self.display_list
+        cmds = []
+        if isinstance(self.node, Element):
+            bgcolor = self.node.style.get("background-color", "transparent")
+            if bgcolor != "transparent":
+                x2, y2 = self.x + self.width, self.y + self.height
+                cmds.append(DrawRect(self.x, self.y, x2, y2, bgcolor))
+
+        if self.layout_mode() == "inline":
+            for x, y, word, font in self.display_list:
+                cmds.append(DrawText(x, y, word, font))
+        return cmds
             
     def process_tree(self, tree):
         if isinstance(tree, Text):
