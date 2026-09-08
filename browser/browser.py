@@ -12,7 +12,6 @@ from .selector import cascade_priority
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
-HSTEP, VSTEP = 13, 18
 STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 

@@ -21,14 +21,4 @@ class Font:
     @property
     def tk_font(self):
         return self._font
-
-
-class FontCache:
-    def __init__(self):
-        self._fonts = {}
-
-    def get(self, style):
-        key = style.key()
-        if key not in self._fonts:
-            self._fonts[key] = Font(style.size, style.weight, style.slant)
-        return self._fonts[key]
+    

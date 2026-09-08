@@ -4,7 +4,6 @@ import gzip
 import os
 import socket
 import ssl
-import sys
 import urllib.parse
 import zlib
 
