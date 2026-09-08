@@ -1,7 +1,6 @@
 import re
 
-from .font import FontCache
-from .style_state import StyleState
+from .font import Font
 from .text import Text
 from .element import Element
 from .draw import DrawRect
@@ -24,12 +23,6 @@ class BlockLayout:
         self.parent = parent
         self.previous = previous
         self.children = []
-        self.cursor_x = 0
-        self.cursor_y = 0
-        self.width = 0
-        self.fonts = None
-        self.style = None
-        self.line =[]
         self.x = None
         self.y = None
         self.width = None
@@ -66,8 +59,7 @@ class BlockLayout:
         else: 
             self.cursor_x = 0
             self.cursor_y = 0
-            self.fonts = FontCache()
-            self.style = StyleState()
+            self.fonts = {}
             self.line =[]
             
             self.process_tree(self.node)
@@ -84,8 +76,8 @@ class BlockLayout:
                 cmds.append(DrawRect(self.x, self.y, x2, y2, bgcolor))
 
         if self.layout_mode() == "inline":
-            for x, y, word, font in self.display_list:
-                cmds.append(DrawText(x, y, word, font))
+            for x, y, word, font, color in self.display_list:
+                cmds.append(DrawText(x, y, word, font, color))
         return cmds
             
     def process_tree(self, tree):
@@ -105,7 +97,8 @@ class BlockLayout:
         content = re.sub(r"\s+", " ", text.text)
 
         for word in content.split():
-            font = self.get_font()
+            color = text.parent.style["color"]
+            font = self.get_font(text.parent)
             word_width = font.measure(word)
             space_width = font.measure(" ")
 
@@ -116,20 +109,20 @@ class BlockLayout:
             if self.cursor_x + required_width > self.width - HSTEP:
                 self.flush()
 
-            self.line.append((self.cursor_x, word, font))
+            self.line.append((self.cursor_x, word, font, color))
             self.cursor_x += word_width + space_width
                     
     def flush(self):
         if not self.line: return
-        metrics = [font.metrics() for x, word, font in self.line]
+        metrics = [font.metrics() for x, word, font, color in self.line]
         max_ascent = max([metric["ascent"] for metric in metrics])
         
         baseline = self.cursor_y + 1.25 * max_ascent
         
-        for rel_x, word, font in self.line:
+        for rel_x, word, font, color in self.line:
             x = self.x + rel_x
             y = self.y + baseline - font.metrics("ascent")
-            self.display_list.append((x,y,word,font))
+            self.display_list.append((x,y,word,font,color))
         
         max_descent = max([metric["descent"] for metric in metrics])
         self.cursor_y = baseline + 1.25 * max_descent
@@ -139,18 +132,28 @@ class BlockLayout:
 
     
     def enter_tag(self, tag):
-        self.style.enter(tag.tag)
-
         if tag.tag == "br":
             self.flush()
             self.cursor_y += VSTEP
 
     def exit_tag(self, tag):
-        self.style.exit(tag.tag)
-
         if tag.tag == "p":
             self.flush()
             self.cursor_y += PARAGRAPH_STEP
-    
-    def get_font(self):
-        return self.fonts.get(self.style)
+
+    def get_font(self, node):
+        styles = getattr(node, "style", {})
+        size = styles.get("font-size", "16px")
+        if isinstance(size, str) and size.endswith("px"):
+            size = float(size[:-2])
+        size = int(round(float(size)))
+
+        weight = styles.get("font-weight", "normal")
+        slant = styles.get("font-style", "normal")
+        if slant == "normal":
+            slant = "roman"
+
+        key = (size, weight, slant)
+        if key not in self.fonts:
+            self.fonts[key] = Font(size, weight, slant)
+        return self.fonts[key]

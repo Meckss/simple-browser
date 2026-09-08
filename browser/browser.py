@@ -23,7 +23,8 @@ class Browser:
         self.canvas = tkinter.Canvas(
             self.window,
             width = WIDTH,
-            height = HEIGHT
+            height = HEIGHT,
+            bg = "pink"
         )
         self.canvas.pack(side = "left", fill = "both", expand = True)
         self.scroll_bar = tkinter.Scrollbar(

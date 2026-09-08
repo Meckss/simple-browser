@@ -39,14 +39,15 @@ def style(node, rules):
         pairs = CSSParser(node.attributes["style"]).body()
         for prop, value in pairs.items():
             node.style[prop] = value
-        if node.style["font-size"].endswith("%"):
-            if node.parent:
-                parent_font_size = node.parent.style["font-size"]
-            else:
-                parent_font_size = INHERITED_PROPERTIES["font-size"]
-            node_pct = float(node.style["font-size"][:-1])/100
-            parent_px = float(parent_font_size[:-2])
-            node.style["font-size"] = str(node_pct * parent_px) + "px"
+
+    if node.style["font-size"].endswith("%"):
+        if node.parent and hasattr(node.parent, "style"):
+            parent_font_size = node.parent.style["font-size"]
+        else:
+            parent_font_size = INHERITED_PROPERTIES["font-size"]
+        node_pct = float(node.style["font-size"][:-1]) / 100
+        parent_px = float(parent_font_size[:-2])
+        node.style["font-size"] = str(node_pct * parent_px) + "px"
     for child in node.children:
         style(child, rules)
 
