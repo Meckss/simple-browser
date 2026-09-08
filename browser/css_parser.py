@@ -1,3 +1,6 @@
+from .selector import TagSelector
+from .selector import DescendantSelector
+
 class CSSParser:
     def __init__(self, s):
         """
@@ -77,7 +80,7 @@ class CSSParser:
             dict[str,str]: A dictionary mapping CSS properties to values.
         """
         pairs = {}
-        while self.i < len(self.s):
+        while self.i < len(self.s) and self.s[self.i] != "}":
             try:
                 prop, val = self.pair()
                 pairs[prop] = val
@@ -85,7 +88,7 @@ class CSSParser:
                 self.literal(";")
                 self.whitespace()
             except ValueError:
-                why = self.ignore_until([";"])
+                why = self.ignore_until([";", "}"])
                 if why == ";":
                     self.literal(";")
                     self.whitespace()
@@ -108,3 +111,59 @@ class CSSParser:
                 return self.s[self.i]
             self.i += 1
         return None
+    
+    def selector(self):
+        """Parse a descendant selector at the current input position.
+
+        Selectors consist of one or more tag names separated by whitespace,
+        such as ``"div p"``. The first tag becomes the ancestor-most
+        selector, and each subsequent tag is nested as a
+        :class:`DescendantSelector`.
+
+        Returns:
+            TagSelector | DescendantSelector: The selector represented by the
+            parsed tag names.
+
+        Raises:
+            ValueError: If no tag name can be parsed at the current position.
+        """
+        out = TagSelector(self.word().casefold())
+        self.whitespace()
+        while self.i < len(self.s) and self.s[self.i] != "{":
+            tag = self.word()
+            descendant = TagSelector(tag.casefold())
+            out = DescendantSelector(out, descendant)
+            self.whitespace()
+        return out
+    
+    def parse(self):
+        """Parse the CSS text into selector and declaration rules.
+
+        Each rule has the form ``selector { property: value; }``. Whitespace
+        is ignored, property names are normalized to lowercase, and malformed
+        input is skipped through the end of the current rule when possible.
+        Parsing starts at the current input position.
+
+        Returns:
+            list[tuple[TagSelector | DescendantSelector, dict[str, str]]]:
+            Parsed selector/body pairs, where each body maps CSS property
+            names to their values.
+        """
+        rules = []
+        while self.i < len(self.s):
+            try:
+                self.whitespace()
+                selector = self.selector()
+                self.literal("{")
+                self.whitespace()
+                body = self.body()
+                self.literal("}")
+                rules.append((selector, body))
+            except ValueError:
+                why = self.ignore_until(["}"])
+                if why == "}":
+                    self.literal("}")
+                    self.whitespace()
+                else:
+                    break
+        return rules

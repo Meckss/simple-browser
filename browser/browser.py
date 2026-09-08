@@ -1,17 +1,24 @@
 import tkinter
+from pathlib import Path
 
 from .page import Page
+from .element import Element
 from .document_layout import DocumentLayout
 from .html_parser import HTMLParser
 from .style import style
+from .css_parser import CSSParser
+from .tree_utils import tree_to_list
 
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
 HSTEP, VSTEP = 13, 18
+STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
+DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
+        self.page = None
         self.canvas = tkinter.Canvas(
             self.window,
             width = WIDTH,
@@ -37,14 +44,15 @@ class Browser:
         self.window.bind("<Button-4>", lambda e: self.scroll_page(-SCROLL_STEP))
         self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP))   
              
-    def render_text(self, text, reset_scroll=True):
+    def render_text(self, text, reset_scroll=True, page=None):
         self.text = text
+        self.page = page
 
         width = self.canvas.winfo_width()
         if width <= 0:
             width = WIDTH
 
-        self.make_layout(text, width)
+        self.make_layout(text, width, page)
 
         if reset_scroll:
             self.scroll = 0
@@ -53,16 +61,32 @@ class Browser:
         paint_tree(self.layout, self.display_list)
         self.draw()
 
-    def make_layout(self, body, width):
+    def make_layout(self, body, width, page = None):
         root = HTMLParser(body).parse_html()
-        style(root)
+        rules = DEFAULT_STYLE_SHEET.copy()
+        links = [node.attributes["href"]
+            for node in tree_to_list(root, [])
+            if isinstance(node, Element)
+            and node.tag == "link"
+            and node.attributes.get("rel") == "stylesheet"
+            and "href" in node.attributes]
+        for link in links:
+            if page is None:
+                continue
+            style_url = page.resolve(link)
+            try: 
+                body = style_url.request()
+            except:
+                continue
+            rules.extend(CSSParser(body).parse())        
+        style(root, rules)
         self.layout = DocumentLayout(root, width)
         self.layout.layout()
     
     def resize(self, event):
         if event.width <= 0 or not self.text:
             return
-        self.make_layout(self.text, event.width)
+        self.make_layout(self.text, event.width, self.page)
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
         self.display_list = []
         paint_tree(self.layout, self.display_list)
@@ -146,8 +170,8 @@ class Browser:
     
     def load(self, url):
         try:
-            __, body = load_page(Page(url))
-            self.render_text(body)
+            page, body = load_page(Page(url))
+            self.render_text(body, page=page)
             
         except (OSError, ValueError, RuntimeError) as error:
             self.show_error("Unable to load page", str(error))

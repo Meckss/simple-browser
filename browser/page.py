@@ -133,6 +133,20 @@ class Page:
 
             data = data[chunk_size + 2:]
         
+    def resolve(self, url):
+        if "://" in url: 
+            return Page(url)
+        if not url.startswith("/"):
+            directory, _ = self.path.rsplit("/", 1)
+            while url.startswith("../"):
+                _, url = url.split("/", 1)
+                if "/" in directory:
+                    directory, _ = directory.rsplit("/", 1)
+            url = directory + "/" + url
+        if url.startswith("//"):
+            return Page(self.scheme+ ":" + url)
+        return Page(self.scheme + "://" + self.host + \
+            ":" + str(self.port) + url)
         
     def request(self):
         if self.scheme == "data":

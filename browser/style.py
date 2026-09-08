@@ -1,7 +1,7 @@
 from .css_parser import CSSParser
 from .element import Element
 
-def style(node):
+def style(node, rules):
     """
     Apply inline CSS styles to a HTML node and its descendents
 
@@ -14,11 +14,16 @@ def style(node):
     """
     if not isinstance(node, Element):
         return
-
+              
     node.style = {}
     if "style" in node.attributes:
+        for selector, body in rules:
+            if not selector.matches(node):
+                continue
+            for prop, value in body.items():
+                node.style[prop] = value
         pairs = CSSParser(node.attributes["style"]).body()
         for prop, value in pairs.items():
             node.style[prop] = value
     for child in node.children:
-        style(child)
+        style(child, rules)
