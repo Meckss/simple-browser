@@ -6,9 +6,10 @@ import tkinter.font
 class Font:
     """Wrap a Tk font and expose the measurements needed by layout."""
 
-    def __init__(self, size, weight, slant):
+    def __init__(self, family, size, weight, slant):
         """Create a font with a point size, weight, and slant."""
         self._font = tkinter.font.Font(
+            family=family,
             size=size,
             weight=weight,
             slant=slant,

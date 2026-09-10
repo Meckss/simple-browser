@@ -175,8 +175,10 @@ class BlockLayout:
         slant = styles.get("font-style", "normal")
         if slant == "normal":
             slant = "roman"
+            
+        family = styles.get("font-family", "Times")
 
-        key = (size, weight, slant)
+        key = (family, size, weight, slant)
         if key not in self.fonts:
-            self.fonts[key] = Font(size, weight, slant)
+            self.fonts[key] = Font(family, size, weight, slant)
         return self.fonts[key]

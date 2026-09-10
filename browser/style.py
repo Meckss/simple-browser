@@ -4,6 +4,7 @@ from .css_parser import CSSParser
 from .element import Element
 
 INHERITED_PROPERTIES = {
+    "font-family" : "Times",
     "font-size" : "16px",
     "font-style": "normal",
     "font-weight": "normal",
