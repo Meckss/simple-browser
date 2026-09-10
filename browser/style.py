@@ -1,5 +1,7 @@
 """CSS inheritance and cascade application for element trees."""
 
+import re
+
 from .css_parser import CSSParser
 from .element import Element
 from .css_utils import css_size_to_px
@@ -23,7 +25,7 @@ class StyleResolver:
     def __init__(self, rules):
         """Prepare rules, expanding stylesheet shorthands once."""
         self.rules = [
-            (selector, expand_declarations(declarations))
+            (selector, _expand_declarations_with_importance(declarations))
             for selector, declarations in rules
         ]
 
@@ -33,8 +35,8 @@ class StyleResolver:
             return
 
         node.style = self._inherited_style(node)
-        self._apply_rules(node)
-        self._apply_inline_style(node)
+        winners = self._apply_rules(node)
+        self._apply_inline_style(node, winners)
         self._resolve_font_size(node)
 
         for child in node.children:
@@ -50,14 +52,26 @@ class StyleResolver:
         return style
 
     def _apply_rules(self, node):
-        for selector, declarations in self.rules:
+        winners = {}
+        for rule_order, (selector, declarations) in enumerate(self.rules):
             if selector.matches(node):
-                node.style.update(declarations)
+                for prop, (value, important) in declarations.items():
+                    priority = (int(important), 0, selector.priority, rule_order)
+                    if prop not in winners or priority >= winners[prop][0]:
+                        winners[prop] = (priority, value)
 
-    def _apply_inline_style(self, node):
+        for prop, (_priority, value) in winners.items():
+            node.style[prop] = value
+        return winners
+
+    def _apply_inline_style(self, node, winners):
         if "style" in node.attributes:
             declarations = CSSParser(node.attributes["style"]).body()
-            node.style.update(expand_declarations(declarations))
+            declarations = _expand_declarations_with_importance(declarations)
+            for prop, (value, important) in declarations.items():
+                priority = (int(important), 1, 0, len(self.rules))
+                if prop not in winners or priority >= winners[prop][0]:
+                    node.style[prop] = value
 
     def _resolve_font_size(self, node):
         value = node.style["font-size"]
@@ -71,20 +85,28 @@ def style(node, rules):
     """Apply stylesheet and inline CSS declarations to an element subtree."""
     StyleResolver(rules).apply(node)
 
-def expand_declarations(declarations):
-    """Expand supported CSS shorthand declarations into longhand values.
+IMPORTANT_SUFFIX = re.compile(r"\s*!\s*important\s*$", re.IGNORECASE)
 
-    The returned dictionary is safe to reuse while styling multiple nodes;
-    stylesheet declarations are therefore expanded once by ``StyleResolver``.
-    """
+
+def _split_important(value):
+    """Return a declaration value and its CSS importance flag."""
+    match = IMPORTANT_SUFFIX.search(value)
+    if match is None:
+        return value.strip(), False
+    return value[:match.start()].rstrip(), True
+
+
+def _expand_declarations_with_importance(declarations):
+    """Expand declarations while retaining importance for every longhand."""
     expanded = {}
-
-    for prop, value in declarations.items():
-        if prop == "font":
-            expanded.update(expand_font_shorthand(value))
-        else:
-            expanded[prop] = value
-
+    for prop, raw_value in declarations.items():
+        value, important = _split_important(raw_value)
+        values = (
+            expand_font_shorthand(value)
+            if prop == "font" else {prop: value}
+        )
+        for expanded_prop, expanded_value in values.items():
+            expanded[expanded_prop] = (expanded_value, important)
     return expanded
 
 def expand_font_shorthand(value):

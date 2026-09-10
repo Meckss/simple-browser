@@ -1,9 +1,20 @@
 """Parser for the browser's small tag-and-descendant CSS subset."""
 
+import re
+
 from .selector import TagSelector
 from .selector import DescendantSelector
 from .selector import ClassSelector
 from .selector import SelectorSequence
+
+
+class CSSValue(str):
+    """A parsed CSS value that also records whether it is important."""
+
+    def __new__(cls, value, important=False):
+        parsed = super().__new__(cls, value)
+        parsed.important = important
+        return parsed
 
 class CSSParser:
     """Parse simple CSS rules into selectors and declaration dictionaries."""
@@ -86,7 +97,10 @@ class CSSParser:
         if not val:
             raise ValueError("Missing property value")
 
-        return prop.casefold(), val
+        return prop.casefold(), CSSValue(
+            val,
+            re.search(r"!\s*important\s*$", val, re.IGNORECASE) is not None
+        )
     
     def body(self):
         """
@@ -99,7 +113,11 @@ class CSSParser:
         while self.i < len(self.s) and self.s[self.i] != "}":
             try:
                 prop, val = self.pair()
-                pairs[prop] = val
+                if prop not in pairs or not (
+                    getattr(pairs[prop], "important", False)
+                    and not getattr(val, "important", False)
+                ):
+                    pairs[prop] = val
                 self.whitespace()
                 self.literal(";")
                 self.whitespace()
