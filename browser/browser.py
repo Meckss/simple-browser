@@ -1,3 +1,5 @@
+"""Tkinter user interface and document-loading orchestration."""
+
 import tkinter
 from pathlib import Path
 
@@ -16,7 +18,9 @@ STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 
 class Browser:
+    """Display parsed pages in a scrollable Tkinter window."""
     def __init__(self):
+        """Create the window, canvas, scrollbar, and input bindings."""
         self.window = tkinter.Tk()
         self.page = None
         self.canvas = tkinter.Canvas(
@@ -46,6 +50,7 @@ class Browser:
         self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP))   
              
     def render_text(self, text, reset_scroll=True, page=None):
+        """Render HTML text, optionally retaining the current scroll position."""
         self.text = text
         self.page = page
 
@@ -63,6 +68,7 @@ class Browser:
         self.draw()
 
     def make_layout(self, body, width, page = None):
+        """Parse, style, and lay out a document for the viewport width."""
         root = HTMLParser(body).parse_html()
         rules = DEFAULT_STYLE_SHEET.copy()
         links = [node.attributes["href"]
@@ -85,6 +91,7 @@ class Browser:
         self.layout.layout()
     
     def resize(self, event):
+        """Reflow the current document after the canvas is resized."""
         if event.width <= 0 or not self.text:
             return
         self.make_layout(self.text, event.width, self.page)
@@ -94,18 +101,21 @@ class Browser:
         self.draw()
         
     def scroll_page(self, amount):
+        """Move the viewport by ``amount`` pixels and redraw it."""
         self.scroll += amount
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
         self.draw()
     
     
     def mouse_scroll(self, event):
+        """Translate a mouse-wheel event into a vertical scroll."""
         if event.delta > 0:
             self.scroll_page(-SCROLL_STEP)
         else:
             self.scroll_page(SCROLL_STEP)
         
     def max_scroll(self):
+        """Return the greatest valid vertical scroll offset."""
         if self.layout is None:
             return 0
         
@@ -114,6 +124,7 @@ class Browser:
         return max(0, self.layout.height - canvas_height)
     
     def update_scroll_bar(self):
+        """Update the scrollbar thumb to reflect the current viewport."""
         canvas_height = self.canvas.winfo_height()
         maximum = self.max_scroll()
         
@@ -127,6 +138,7 @@ class Browser:
         self.scroll_bar.set(first, last)
     
     def scroll_bar_scroll(self, *args):
+        """Handle Tkinter scrollbar commands and redraw the document."""
         canvas_height = self.canvas.winfo_height()
         maximum = self.max_scroll()
         
@@ -145,6 +157,7 @@ class Browser:
         self.draw()
         
     def draw(self):
+        """Paint visible display commands onto the canvas."""
         self.canvas.delete("all")
         canvas_height = self.canvas.winfo_height()
 
@@ -155,6 +168,7 @@ class Browser:
         self.update_scroll_bar()
         
     def show_error(self, title, error):
+        """Render a user-facing error page with the supplied message."""
         error_text = (
             f"{title}\n\n"
             f"{error}\n\n"
@@ -170,6 +184,7 @@ class Browser:
         self.render_text(error_text)
     
     def load(self, url):
+        """Fetch and render ``url``, showing supported load errors in the UI."""
         try:
             page, body = load_page(Page(url))
             self.render_text(body, page=page)
@@ -179,6 +194,14 @@ class Browser:
         
         
 def load_page(page, max_redirects = 10):
+    """Request a page and follow redirects up to ``max_redirects`` times.
+
+    Returns:
+        tuple[Page, str]: The final page object and its response body.
+
+    Raises:
+        RuntimeError: If the redirect limit is exceeded.
+    """
     redirects_followed = 0
     while True:
         body = page.request()
@@ -201,6 +224,7 @@ def load_page(page, max_redirects = 10):
     return page, body
 
 def paint_tree(layout_object, display_list):
+    """Append paint commands for a layout tree in pre-order."""
     display_list.extend(layout_object.paint())
     
     for child in layout_object.children:

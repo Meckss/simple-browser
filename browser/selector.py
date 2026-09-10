@@ -1,7 +1,6 @@
-from .element import Element
-
-
 """Selectors used to match elements in the browser's document tree."""
+
+from .element import Element
 
 
 class TagSelector:
@@ -63,5 +62,6 @@ class DescendantSelector:
         return False
 
 def cascade_priority(rule):
+    """Return the selector priority used to order a CSS rule."""
     selector, _ = rule
     return selector.priority

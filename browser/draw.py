@@ -1,5 +1,9 @@
+"""Drawing command objects consumed by the Tkinter canvas."""
+
 class DrawText:
+    """Represent one piece of text to draw at a document coordinate."""
     def __init__(self, x1, y1, text, font, color):
+        """Create a text command with its font and foreground color."""
         self.top = y1
         self.left = x1
         self.text = text
@@ -8,6 +12,7 @@ class DrawText:
         self.bottom = y1 + font.metrics("linespace")
     
     def execute(self, scroll, canvas):
+        """Draw the text on ``canvas`` adjusted by the vertical scroll offset."""
         canvas.create_text(
             self.left, self.top - scroll,
             text = self.text,
@@ -17,7 +22,9 @@ class DrawText:
         )
     
 class DrawRect:
+    """Represent a filled rectangle to draw behind page content."""
     def __init__(self, x1, y1, x2, y2, color):
+        """Create a rectangle command from its corners and fill color."""
         self.top = y1
         self.left = x1
         self.bottom = y2
@@ -25,6 +32,7 @@ class DrawRect:
         self.color = color
         
     def execute(self, scroll, canvas):
+        """Draw the rectangle adjusted by the vertical scroll offset."""
         canvas.create_rectangle(
             self.left, self.top - scroll,
             self.right, self.bottom - scroll,

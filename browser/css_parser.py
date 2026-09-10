@@ -1,7 +1,10 @@
+"""Parser for the browser's small tag-and-descendant CSS subset."""
+
 from .selector import TagSelector
 from .selector import DescendantSelector
 
 class CSSParser:
+    """Parse simple CSS rules into selectors and declaration dictionaries."""
     def __init__(self, s):
         """
         Initializes the CSS parser

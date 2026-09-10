@@ -1,3 +1,5 @@
+"""Block and inline layout for parsed HTML documents."""
+
 import re
 
 from .font import Font
@@ -18,7 +20,10 @@ BLOCK_ELEMENTS = [
 ]
     
 class BlockLayout:
+    """Lay out one block of the document tree and produce paint commands."""
+
     def __init__(self, node, parent, previous):
+        """Create a layout object for ``node``."""
         self.node = node
         self.parent = parent
         self.previous = previous
@@ -30,6 +35,7 @@ class BlockLayout:
         self.display_list = []
         
     def layout_mode(self):
+        """Return ``"block"`` or ``"inline"`` for this node's contents."""
         if isinstance(self.node, Text):
             return "inline"
 
@@ -44,6 +50,7 @@ class BlockLayout:
         return "block"
         
     def layout(self):
+        """Compute this object's position, dimensions, and child layouts."""
         self.x = self.parent.x
         self.width = self.parent.width
         if self.previous:
@@ -72,6 +79,7 @@ class BlockLayout:
             self.height = self.cursor_y
             
     def paint(self):
+        """Return drawing commands for this layout object and inline text."""
         cmds = []
         if isinstance(self.node, Element):
             bgcolor = self.node.style.get("background-color", "transparent")
@@ -85,6 +93,7 @@ class BlockLayout:
         return cmds
             
     def process_tree(self, tree):
+        """Traverse an inline subtree, applying tag and text layout behavior."""
         if isinstance(tree, Text):
             self.process_text(tree)
             return
@@ -98,6 +107,7 @@ class BlockLayout:
         self.exit_tag(tree)
                 
     def process_text(self, text):
+        """Wrap a text node into words and append them to the current line."""
         content = re.sub(r"\s+", " ", text.text)
 
         for word in content.split():
@@ -117,6 +127,7 @@ class BlockLayout:
             self.cursor_x += word_width + space_width
                     
     def flush(self):
+        """Place the current line in the display list and start a new line."""
         if not self.line: return
         metrics = [font.metrics() for x, word, font, color in self.line]
         max_ascent = max([metric["ascent"] for metric in metrics])
@@ -136,16 +147,19 @@ class BlockLayout:
 
     
     def enter_tag(self, tag):
+        """Apply layout behavior that occurs when entering an element."""
         if tag.tag == "br":
             self.flush()
             self.cursor_y += VSTEP
 
     def exit_tag(self, tag):
+        """Apply layout behavior that occurs after an element's children."""
         if tag.tag == "p":
             self.flush()
             self.cursor_y += PARAGRAPH_STEP
 
     def get_font(self, node):
+        """Return a cached font matching the node's computed text styles."""
         styles = getattr(node, "style", {})
         size = styles.get("font-size", "16px")
         if isinstance(size, str) and size.endswith("px"):

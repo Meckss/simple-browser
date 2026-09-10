@@ -1,3 +1,5 @@
+"""URL parsing, socket transport, and response decoding for page loads."""
+
 import base64
 import binascii
 import gzip
@@ -8,9 +10,11 @@ import urllib.parse
 import zlib
 
 class Page:
+    """Represent a supported URL and retrieve its text response."""
     connections = {}
     
     def __init__(self, url):
+        """Parse an HTTP(S), file, data, or view-source URL."""
         self.original_url = url
         self.redirect_url = None
         self.view_source = False
@@ -51,9 +55,11 @@ class Page:
         self.path = "/" + url
         
     def connection_key(self):
+        """Return the tuple used to reuse this page's network connection."""
         return self.scheme, self.host, self.port
     
     def connect(self):
+        """Open or reuse a TCP connection, adding TLS for HTTPS."""
         key = self.connection_key()
         
         if key in Page.connections:
@@ -75,6 +81,7 @@ class Page:
         return s
     
     def receive_until(self, s, marker):
+        """Read from ``s`` until ``marker`` occurs in the accumulated bytes."""
         data = b""
         
         while marker not in data:
@@ -88,6 +95,7 @@ class Page:
         return data
     
     def receive_exactly(self, s, amount):
+        """Read exactly ``amount`` bytes or raise if the connection closes."""
         data = b""
         
         while len(data) < amount:
@@ -100,6 +108,7 @@ class Page:
         return data
         
     def read_chunked_body(self, s, data):
+        """Decode an HTTP chunked body, including bytes already in ``data``."""
         content = b""
 
         while True:
@@ -133,6 +142,7 @@ class Page:
             data = data[chunk_size + 2:]
         
     def resolve(self, url):
+        """Resolve a relative or scheme-relative URL against this page."""
         if "://" in url: 
             return Page(url)
         if not url.startswith("/"):
@@ -148,6 +158,7 @@ class Page:
             ":" + str(self.port) + url)
         
     def request(self):
+        """Fetch the page and return its response decoded as UTF-8 text."""
         if self.scheme == "data":
             try:
                 metadata, data = self.data.split(",", 1)

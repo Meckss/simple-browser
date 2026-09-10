@@ -1,3 +1,5 @@
+"""Small, forgiving HTML parser that builds an element and text tree."""
+
 import html
 import re
 
@@ -19,11 +21,14 @@ HEAD_TAGS = [
 RAW_TEXT_TAGS = {"script", "style"}
 
 class HTMLParser:
+    """Parse HTML while supplying a few browser-style implicit elements."""
     def __init__(self, body):
+        """Create a parser for the supplied HTML source text."""
         self.body = body
         self.unfinished = []
     
     def parse_html(self):
+        """Parse the source and return the completed root element."""
         buffer = ""
         in_tag = False
         i = 0
@@ -65,6 +70,7 @@ class HTMLParser:
         return self.finish()
         
     def add_text(self, text):
+        """Append non-whitespace text to the currently open element."""
         if text.isspace(): return
         self.implicit_tags(None)
         if not self.unfinished:
@@ -74,6 +80,7 @@ class HTMLParser:
         parent.children.append(node)
         
     def add_tag(self, tag):
+        """Parse one tag token and update the open-element stack."""
         tag, attributes = self.get_attributes(tag)
         if tag.startswith("!"):
             return
@@ -100,6 +107,7 @@ class HTMLParser:
             self.unfinished.append(node)
     
     def get_attributes(self, text):
+        """Split a tag token into a lowercase tag name and its attributes."""
         parts = []
         current = ""
         quote = None
@@ -135,6 +143,7 @@ class HTMLParser:
         return tag, attributes
             
     def finish(self):
+        """Close remaining open elements and return the document root."""
         if not self.unfinished:
             self.implicit_tags(None)
         while len(self.unfinished) > 1:
@@ -144,15 +153,16 @@ class HTMLParser:
         return self.unfinished.pop()
     
     def implicit_tags(self, tag):
+        """Insert or close ``html``, ``head``, and ``body`` as needed."""
         while True:
             open_tags = [node.tag for node in self.unfinished]
             if open_tags == [] and tag != "html":
                 self.add_tag("html")
             elif open_tags == ["html"] and tag not in ["head", "body", "/html"]:
-                    if tag in HEAD_TAGS:
-                        self.add_tag("head")
-                    else:
-                        self.add_tag("body")
+                if tag in HEAD_TAGS:
+                    self.add_tag("head")
+                else:
+                    self.add_tag("body")
             elif open_tags == ["html", "head"] and \
                 tag not in ["head", "/head"] + HEAD_TAGS:
                 self.add_tag("/head")
@@ -162,6 +172,7 @@ class HTMLParser:
                 break
 
     def close_open_tag(self, tag):
+        """Close open elements through the nearest element named ``tag``."""
         while self.unfinished:
             node = self.unfinished.pop()
             parent = self.unfinished[-1] if self.unfinished else None
@@ -171,6 +182,7 @@ class HTMLParser:
                 return
 
     def should_implicitly_close(self, tag, open_tags):
+        """Return whether opening ``tag`` implicitly closes an open element."""
         if tag == "p":
             return "p" in open_tags
         if tag == "li":

@@ -1,3 +1,5 @@
+"""CSS inheritance and cascade application for element trees."""
+
 from .css_parser import CSSParser
 from .element import Element
 
@@ -9,15 +11,17 @@ INHERITED_PROPERTIES = {
 }
 
 def style(node, rules):
-    """
-    Apply inline CSS styles to a HTML node and its descendents
+    """Apply stylesheet and inline CSS declarations to an element subtree.
 
-    Each node receives a ``style`` dictionary. If an element has a
-    ``style`` attribute, its CSS declarations are parsed and stored in
-    that dictionary.
+    Each element receives a computed ``style`` dictionary. Inherited defaults,
+    matching stylesheet rules, and finally the element's ``style`` attribute
+    are applied in that order. Font percentages are resolved against the
+    parent's computed font size.
     
     Args:
-        node: The HTML element or its descendents
+        node: The HTML element whose subtree should be styled.
+        rules: An iterable of ``(selector, declarations)`` stylesheet rules,
+            ordered from lowest to highest cascade priority.
     """
     if not isinstance(node, Element):
         return

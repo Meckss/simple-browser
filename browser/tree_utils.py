@@ -1,3 +1,5 @@
+"""Utilities for traversing parsed document trees."""
+
 def tree_to_list(tree, list):
     """Flatten a tree into a list using a pre-order traversal.
 
