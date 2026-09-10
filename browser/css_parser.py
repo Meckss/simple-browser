@@ -1,4 +1,4 @@
-"""Parser for the browser's small tag-and-descendant CSS subset."""
+"""Parser for the browser's small tag, descendant, and ``:has`` CSS subset."""
 
 import re
 
@@ -6,6 +6,7 @@ from .selector import TagSelector
 from .selector import DescendantSelector
 from .selector import ClassSelector
 from .selector import SelectorSequence
+from .selector import HasSelector
 
 
 class CSSValue(str):
@@ -150,21 +151,84 @@ class CSSParser:
         """Parse a compound selector at the current input position.
 
         Compound selectors have no whitespace between their components, for
-        example ``div.warning`` or ``.warning.important``.
+        example ``div.warning`` or ``.warning:has(a)``.
         """
         selectors = []
         if self.s[self.i] == ".":
             self.i += 1
             selectors.append(ClassSelector(self.selector_word().casefold()))
+        elif self.s[self.i] == ":":
+            selectors.append(self.pseudo_selector())
         else:
             selectors.append(TagSelector(self.selector_word().casefold()))
 
-        while self.i < len(self.s) and self.s[self.i] == ".":
-            self.i += 1
-            selectors.append(ClassSelector(self.selector_word().casefold()))
+        while self.i < len(self.s) and self.s[self.i] in ".:":
+            if self.s[self.i] == ".":
+                self.i += 1
+                selectors.append(ClassSelector(self.selector_word().casefold()))
+            else:
+                selectors.append(self.pseudo_selector())
 
         return selectors[0] if len(selectors) == 1 \
             else SelectorSequence(selectors)
+
+    def pseudo_selector(self):
+        """Parse a supported pseudo-class selector."""
+        self.literal(":")
+        name = self.selector_word().casefold()
+        if name != "has":
+            raise ValueError("Unsupported pseudo-class")
+        self.literal("(")
+        argument = self.parenthesized_argument()
+        if not argument.strip():
+            raise ValueError("Missing :has argument")
+
+        selectors = []
+        for part in self.split_selector_list(argument):
+            parser = CSSParser(part)
+            selector = parser.selector()
+            parser.whitespace()
+            if parser.i != len(part):
+                raise ValueError("Invalid :has argument")
+            selectors.append(selector)
+        return HasSelector(selectors)
+
+    def parenthesized_argument(self):
+        """Consume a balanced parenthesized selector argument."""
+        start = self.i
+        depth = 1
+        while self.i < len(self.s):
+            if self.s[self.i] == "(":
+                depth += 1
+            elif self.s[self.i] == ")":
+                depth -= 1
+                if depth == 0:
+                    argument = self.s[start:self.i]
+                    self.i += 1
+                    return argument
+            self.i += 1
+        raise ValueError("Unclosed pseudo-class")
+
+    @staticmethod
+    def split_selector_list(selector_text):
+        """Split a selector list on commas outside nested parentheses."""
+        parts = []
+        start = 0
+        depth = 0
+        for i, char in enumerate(selector_text):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            elif char == "," and depth == 0:
+                if not selector_text[start:i].strip():
+                    raise ValueError("Empty selector in list")
+                parts.append(selector_text[start:i])
+                start = i + 1
+        if depth != 0 or not selector_text[start:].strip():
+            raise ValueError("Invalid selector list")
+        parts.append(selector_text[start:])
+        return parts
 
     def selector_word(self):
         """Parse a tag or class name without consuming a selector delimiter."""
@@ -180,10 +244,10 @@ class CSSParser:
     def selector(self):
         """Parse a selector containing compound and descendant selectors.
 
-        Whitespace separates descendants, while adjacent tag/class components
-        form a :class:`SelectorSequence` matching one element. For example,
-        ``"main .warning.important"`` means a warning and important element
-        somewhere below ``main``.
+        Whitespace separates descendants, while adjacent tag/class/pseudo
+        components form a :class:`SelectorSequence` matching one element.
+        For example, ``"main .warning:has(a)"`` means a warning element
+        containing a link somewhere below ``main``.
 
         Returns:
             SelectorSequence | DescendantSelector: The parsed selector.

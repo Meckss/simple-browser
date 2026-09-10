@@ -3,6 +3,30 @@
 from .element import Element
 
 
+class HasSelector:
+    """Select elements containing a descendant matching one of the selectors."""
+
+    def __init__(self, selectors):
+        """Create a ``:has(...)`` selector from relative selectors."""
+        self.selectors = tuple(selectors)
+        if not self.selectors:
+            raise ValueError("A has selector needs an argument")
+        self.priority = max(selector.priority for selector in self.selectors)
+
+    def matches(self, node):
+        """Return whether ``node`` has a matching descendant."""
+        if not isinstance(node, Element):
+            return False
+
+        descendants = list(node.children)
+        while descendants:
+            descendant = descendants.pop()
+            if any(selector.matches(descendant) for selector in self.selectors):
+                return True
+            descendants.extend(descendant.children)
+        return False
+
+
 class TagSelector:
     """Select elements whose tag name matches a requested tag."""
 
