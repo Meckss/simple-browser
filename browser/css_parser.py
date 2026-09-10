@@ -2,6 +2,7 @@
 
 from .selector import TagSelector
 from .selector import DescendantSelector
+from .selector import ClassSelector
 
 class CSSParser:
     """Parse simple CSS rules into selectors and declaration dictionaries."""
@@ -130,8 +131,18 @@ class CSSParser:
         Raises:
             ValueError: If no tag name can be parsed at the current position.
         """
-        out = TagSelector(self.word().casefold())
         self.whitespace()
+        if self.i >= len(self.s):
+            raise ValueError("Missing selector")
+        
+        if self.s[self.i] == ".":
+            self.i += 1
+            name = self.word().casefold()
+            out = ClassSelector(name)
+        else: 
+            out = TagSelector(self.word().casefold())
+        self.whitespace()
+            
         while self.i < len(self.s) and self.s[self.i] != "{":
             tag = self.word()
             descendant = TagSelector(tag.casefold())

@@ -60,6 +60,36 @@ class DescendantSelector:
                 return True
             node = node.parent
         return False
+    
+class ClassSelector:
+    """Select elements whose attributes contains the requested class"""
+    
+    def __init__(self, class_name):
+        """Create a class selector
+        
+        Args:
+            class: The class name to match, such as "warn"
+        """
+        self.class_name = class_name
+        self.priority = 10
+        
+    def matches(self, node):
+        """Return whether ``node`` is an element with the selected class.
+        
+            Args:
+                node: The node to test.
+    
+            Returns:
+                ``True`` when ``node`` is an element with the selected class;
+                otherwise, ``False``.
+        """
+        if not isinstance(node, Element):
+            return False
+        classes = node.attributes.get("class")
+        if classes is None:
+            return False
+        return self.class_name in classes.split()
+
 
 def cascade_priority(rule):
     """Return the selector priority used to order a CSS rule."""
