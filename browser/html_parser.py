@@ -5,20 +5,12 @@ import re
 
 from .text import Text
 from .element import Element
-
-SELF_CLOSING_TAGS = [
-    "area", "base", "br", "col", "embed", "hr", "img", "input",
-    "link", "meta", "param", "source", "track", "wbr",
-]
-
-IMPLICITLY_CLOSED_BY_SAME_TAG = {"p", "li"}
-
-HEAD_TAGS = [
-    "base", "basefont", "bgsound", "noscript",
-    "link", "meta", "title", "style", "script",
-]
-
-RAW_TEXT_TAGS = {"script", "style"}
+from .html_constants import (
+    HEAD_TAGS,
+    IMPLICITLY_CLOSED_BY_SAME_TAG,
+    RAW_TEXT_TAGS,
+    SELF_CLOSING_TAGS,
+)
 
 class HTMLParser:
     """Parse HTML while supplying a few browser-style implicit elements."""

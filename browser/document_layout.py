@@ -1,8 +1,7 @@
 """Top-level layout wrapper for an HTML document."""
 
 from .block_layout import BlockLayout
-
-HSTEP, VSTEP = 13, 18
+from .layout_constants import HSTEP, VSTEP
 
 class DocumentLayout:
     """Provide the viewport-relative root layout around the document body."""

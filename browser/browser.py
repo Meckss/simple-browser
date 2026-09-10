@@ -11,9 +11,7 @@ from .style import style
 from .css_parser import CSSParser
 from .tree_utils import tree_to_list
 from .selector import cascade_priority
-
-WIDTH, HEIGHT = 800, 600
-SCROLL_STEP = 100
+from .ui_constants import HEIGHT, SCROLL_STEP, WIDTH
 STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 

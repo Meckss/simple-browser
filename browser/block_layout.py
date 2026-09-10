@@ -7,17 +7,7 @@ from .text import Text
 from .element import Element
 from .draw import DrawRect
 from .draw import DrawText
-
-HSTEP, VSTEP = 13, 18
-PARAGRAPH_STEP = 30
-BLOCK_ELEMENTS = [
-    "html", "body", "article", "section", "nav", "aside",
-    "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
-    "footer", "address", "p", "hr", "pre", "blockquote",
-    "ol", "ul", "menu", "li", "dl", "dt", "dd", "figure",
-    "figcaption", "main", "div", "table", "form", "fieldset",
-    "legend", "details", "summary"
-]
+from .layout_constants import BLOCK_ELEMENTS, HSTEP, PARAGRAPH_STEP, VSTEP
     
 class BlockLayout:
     """Lay out one block of the document tree and produce paint commands."""
@@ -33,6 +23,10 @@ class BlockLayout:
         self.width = None
         self.height = None
         self.display_list = []
+        self.cursor_x = 0
+        self.cursor_y = 0
+        self.fonts = {}
+        self.line = []
         
     def layout_mode(self):
         """Return ``"block"`` or ``"inline"`` for this node's contents."""
@@ -59,24 +53,25 @@ class BlockLayout:
             self.y = self.parent.y
         mode = self.layout_mode()
         if mode == "block":
-            previous = None
-            for child in self.node.children:
-                next_child = BlockLayout(child, self, previous)
-                self.children.append(next_child)
-                next_child.layout()
-                previous = next_child
-            self.height = sum([child.height for child in self.children])
+            self._layout_block_children()
+        else:
+            self._layout_inline_content()
 
-        else: 
-            self.cursor_x = 0
-            self.cursor_y = 0
-            self.fonts = {}
-            self.line =[]
-            
-            self.process_tree(self.node)
-                
-            self.flush()
-            self.height = self.cursor_y
+    def _layout_block_children(self):
+        """Create and lay out this block's child layout objects in order."""
+        previous = None
+        for child in self.node.children:
+            next_child = BlockLayout(child, self, previous)
+            self.children.append(next_child)
+            next_child.layout()
+            previous = next_child
+        self.height = sum(child.height for child in self.children)
+
+    def _layout_inline_content(self):
+        """Lay out inline descendants into lines and calculate total height."""
+        self.process_tree(self.node)
+        self.flush()
+        self.height = self.cursor_y
             
     def paint(self):
         """Return drawing commands for this layout object and inline text."""
@@ -148,15 +143,25 @@ class BlockLayout:
     
     def enter_tag(self, tag):
         """Apply layout behavior that occurs when entering an element."""
-        if tag.tag == "br":
-            self.flush()
-            self.cursor_y += VSTEP
+        handler = {"br": self._enter_line_break}.get(tag.tag)
+        if handler:
+            handler()
+
+    def _enter_line_break(self):
+        """Finish the current line and advance by one line-height step."""
+        self.flush()
+        self.cursor_y += VSTEP
 
     def exit_tag(self, tag):
         """Apply layout behavior that occurs after an element's children."""
-        if tag.tag == "p":
-            self.flush()
-            self.cursor_y += PARAGRAPH_STEP
+        handler = {"p": self._exit_paragraph}.get(tag.tag)
+        if handler:
+            handler()
+
+    def _exit_paragraph(self):
+        """Finish a paragraph and add the paragraph separation spacing."""
+        self.flush()
+        self.cursor_y += PARAGRAPH_STEP
 
     def get_font(self, node):
         """Return a cached font matching the node's computed text styles."""

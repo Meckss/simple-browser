@@ -10,49 +10,57 @@ INHERITED_PROPERTIES = {
     "color": "black"
 }
 
-def style(node, rules):
-    """Apply stylesheet and inline CSS declarations to an element subtree.
+class StyleResolver:
+    """Resolve computed styles for an element tree.
 
-    Each element receives a computed ``style`` dictionary. Inherited defaults,
-    matching stylesheet rules, and finally the element's ``style`` attribute
-    are applied in that order. Font percentages are resolved against the
-    parent's computed font size.
-    
-    Args:
-        node: The HTML element whose subtree should be styled.
-        rules: An iterable of ``(selector, declarations)`` stylesheet rules,
-            ordered from lowest to highest cascade priority.
+    Keeping cascade and inheritance here gives callers a small object-oriented
+    API while retaining the original ``style(node, rules)`` convenience
+    function below.
     """
-    if not isinstance(node, Element):
-        return
-              
-    node.style = {}
-    for prop, default_value in INHERITED_PROPERTIES.items():
-        if node.parent and hasattr(node.parent, "style"):
-            node.style[prop] = node.parent.style.get(prop, default_value)
-        else:
-            node.style[prop] = default_value
 
-    for selector, body in rules:
-        if not selector.matches(node):
-            continue
-        for prop, value in body.items():
-            node.style[prop] = value
+    def __init__(self, rules):
+        self.rules = rules
 
-    if "style" in node.attributes:
-        pairs = CSSParser(node.attributes["style"]).body()
-        for prop, value in pairs.items():
-            node.style[prop] = value
+    def apply(self, node):
+        """Apply computed styles to ``node`` and all of its descendants."""
+        if not isinstance(node, Element):
+            return
 
-    if node.style["font-size"].endswith("%"):
-        if node.parent and hasattr(node.parent, "style"):
-            parent_font_size = node.parent.style["font-size"]
-        else:
-            parent_font_size = INHERITED_PROPERTIES["font-size"]
-        node_pct = float(node.style["font-size"][:-1]) / 100
-        parent_px = float(parent_font_size[:-2])
-        node.style["font-size"] = str(node_pct * parent_px) + "px"
-    for child in node.children:
-        style(child, rules)
+        node.style = self._inherited_style(node)
+        self._apply_rules(node)
+        self._apply_inline_style(node)
+        self._resolve_font_size(node)
 
-            
+        for child in node.children:
+            self.apply(child)
+
+    def _inherited_style(self, node):
+        parent_style = getattr(node.parent, "style", {}) if node.parent else {}
+        return {
+            prop: parent_style.get(prop, default)
+            for prop, default in INHERITED_PROPERTIES.items()
+        }
+
+    def _apply_rules(self, node):
+        for selector, declarations in self.rules:
+            if selector.matches(node):
+                node.style.update(declarations)
+
+    def _apply_inline_style(self, node):
+        if "style" in node.attributes:
+            node.style.update(CSSParser(node.attributes["style"]).body())
+
+    def _resolve_font_size(self, node):
+        value = node.style["font-size"]
+        if not value.endswith("%"):
+            return
+        parent_style = getattr(node.parent, "style", {}) if node.parent else {}
+        parent_size = parent_style.get("font-size", INHERITED_PROPERTIES["font-size"])
+        percentage = float(value[:-1]) / 100
+        pixels = float(parent_size[:-2])
+        node.style["font-size"] = f"{percentage * pixels}px"
+
+
+def style(node, rules):
+    """Apply stylesheet and inline CSS declarations to an element subtree."""
+    StyleResolver(rules).apply(node)
