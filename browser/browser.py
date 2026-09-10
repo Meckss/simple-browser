@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .page import Page
 from .element import Element
+from .text import Text
 from .document_layout import DocumentLayout
 from .html_parser import HTMLParser
 from .style import style
@@ -75,21 +76,29 @@ class Browser:
         self._layout_width = width
         root = HTMLParser(body).parse_html()
         rules = DEFAULT_STYLE_SHEET.copy()
-        links = [node.attributes["href"]
-            for node in tree_to_list(root, [])
-            if isinstance(node, Element)
-            and node.tag == "link"
-            and node.attributes.get("rel") == "stylesheet"
-            and "href" in node.attributes]
-        for link in links:
-            if page is None:
+
+        for node in tree_to_list(root, []):
+            if not isinstance(node, Element):
                 continue
-            style_url = page.resolve(link)
-            try: 
-                body = style_url.request()
-            except:
-                continue
-            rules.extend(CSSParser(body).parse())        
+            if node.tag == "style":
+                stylesheet = "".join(
+                    child.text for child in node.children
+                    if isinstance(child, Text)
+                )
+                rules.extend(CSSParser(stylesheet).parse())
+            elif (
+                node.tag == "link"
+                and node.attributes.get("rel") == "stylesheet"
+                and "href" in node.attributes
+                and page is not None
+            ):
+                style_url = page.resolve(node.attributes["href"])
+                try:
+                    stylesheet = style_url.request()
+                except OSError:
+                    continue
+                rules.extend(CSSParser(stylesheet).parse())
+
         style(root, sorted(rules, key = cascade_priority))
         self.layout = DocumentLayout(root, width)
         self.layout.layout()

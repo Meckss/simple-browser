@@ -59,8 +59,10 @@ class HTMLParser:
                 )
                 if closing is None:
                     break
+                raw_text = self.body[i:i + closing.start()]
+                if raw_text:
+                    self.add_text(raw_text)
                 i += closing.start()
-                buffer = ""
                 self.add_tag("/" + raw_tag)
                 i += closing.end() - closing.start()
                 continue
