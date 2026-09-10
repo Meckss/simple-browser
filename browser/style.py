@@ -38,10 +38,12 @@ class StyleResolver:
 
     def _inherited_style(self, node):
         parent_style = getattr(node.parent, "style", {}) if node.parent else {}
-        return {
+        style = {
             prop: parent_style.get(prop, default)
             for prop, default in INHERITED_PROPERTIES.items()
         }
+        style["display"] = "inline"
+        return style
 
     def _apply_rules(self, node):
         for selector, declarations in self.rules:

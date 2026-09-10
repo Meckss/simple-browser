@@ -7,7 +7,7 @@ from .text import Text
 from .element import Element
 from .draw import DrawRect
 from .draw import DrawText
-from .layout_constants import BLOCK_ELEMENTS, HSTEP, PARAGRAPH_STEP, VSTEP
+from .layout_constants import HSTEP, PARAGRAPH_STEP, VSTEP
 from .css_utils import css_size_to_px
     
 class BlockLayout:
@@ -35,7 +35,8 @@ class BlockLayout:
             return "inline"
 
         if any(
-            isinstance(child, Element) and child.tag in BLOCK_ELEMENTS
+            isinstance(child, Element)
+            and child.style.get("display") in ("block", "list-item", "table")
             for child in self.node.children
         ):
             return "block"
@@ -46,6 +47,13 @@ class BlockLayout:
         
     def layout(self):
         """Compute this object's position, dimensions, and child layouts."""
+        if isinstance(self.node, Element) and self.node.style.get("display") == "none":
+            self.x = self.parent.x
+            self.y = self.parent.y
+            self.width = self.parent.width
+            self.height = 0
+            return
+
         styles = getattr(self.node, "style", {})
         self.x = self.parent.x
         self.y = (
@@ -81,6 +89,8 @@ class BlockLayout:
         """Create and lay out this block's child layout objects in order."""
         previous = None
         for child in self.node.children:
+            if isinstance(child, Element) and child.style.get("display") == "none":
+                continue
             next_child = BlockLayout(child, self, previous)
             self.children.append(next_child)
             next_child.layout()
@@ -113,7 +123,7 @@ class BlockLayout:
             self.process_text(tree)
             return
 
-        if not tree.is_rendered():
+        if not tree.is_rendered() or tree.style.get("display") == "none":
             return
 
         self.enter_tag(tree)
