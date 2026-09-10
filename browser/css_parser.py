@@ -3,6 +3,7 @@
 from .selector import TagSelector
 from .selector import DescendantSelector
 from .selector import ClassSelector
+from .selector import SelectorSequence
 
 class CSSParser:
     """Parse simple CSS rules into selectors and declaration dictionaries."""
@@ -15,7 +16,6 @@ class CSSParser:
         """
         self.i = 0
         self.s = s
-    
     
     def word(self):
         """Parse a CSS identifier/token."""
@@ -128,17 +128,47 @@ class CSSParser:
             self.i += 1
         return None
     
-    def selector(self):
-        """Parse a descendant selector at the current input position.
+    def selector_sequence(self):
+        """Parse a compound selector at the current input position.
 
-        Selectors consist of one or more tag names separated by whitespace,
-        such as ``"div p"``. The first tag becomes the ancestor-most
-        selector, and each subsequent tag is nested as a
-        :class:`DescendantSelector`.
+        Compound selectors have no whitespace between their components, for
+        example ``div.warning`` or ``.warning.important``.
+        """
+        selectors = []
+        if self.s[self.i] == ".":
+            self.i += 1
+            selectors.append(ClassSelector(self.selector_word().casefold()))
+        else:
+            selectors.append(TagSelector(self.selector_word().casefold()))
+
+        while self.i < len(self.s) and self.s[self.i] == ".":
+            self.i += 1
+            selectors.append(ClassSelector(self.selector_word().casefold()))
+
+        return selectors[0] if len(selectors) == 1 \
+            else SelectorSequence(selectors)
+
+    def selector_word(self):
+        """Parse a tag or class name without consuming a selector delimiter."""
+        start = self.i
+        while self.i < len(self.s) and (
+            self.s[self.i].isalnum() or self.s[self.i] in "-_"
+        ):
+            self.i += 1
+        if self.i == start:
+            raise ValueError("Selector parsing error")
+        return self.s[start:self.i]
+
+    def selector(self):
+        """Parse a selector containing compound and descendant selectors.
+
+        Whitespace separates descendants, while adjacent tag/class components
+        form a :class:`SelectorSequence` matching one element. For example,
+        ``"main .warning.important"`` means a warning and important element
+        somewhere below ``main``.
 
         Returns:
-            TagSelector | DescendantSelector: The selector represented by the
-            parsed tag names.
+            SelectorSequence | DescendantSelector: The parsed selector.
 
         Raises:
             ValueError: If no tag name can be parsed at the current position.
@@ -147,17 +177,11 @@ class CSSParser:
         if self.i >= len(self.s):
             raise ValueError("Missing selector")
         
-        if self.s[self.i] == ".":
-            self.i += 1
-            name = self.word().casefold()
-            out = ClassSelector(name)
-        else: 
-            out = TagSelector(self.word().casefold())
+        out = self.selector_sequence()
         self.whitespace()
-            
+
         while self.i < len(self.s) and self.s[self.i] != "{":
-            tag = self.word()
-            descendant = TagSelector(tag.casefold())
+            descendant = self.selector_sequence()
             out = DescendantSelector(out, descendant)
             self.whitespace()
         return out

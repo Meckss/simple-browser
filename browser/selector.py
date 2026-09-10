@@ -102,6 +102,27 @@ class ClassSelector:
         return self.class_name in classes.split()
 
 
+class SelectorSequence:
+    """Select elements matching several simple selectors at once.
+
+    A sequence represents a compound selector, such as ``p.warning`` or
+    ``.warning.important``.  Every selector in the sequence is tested against
+    the same element; descendant relationships are represented separately by
+    :class:`DescendantSelector`.
+    """
+
+    def __init__(self, selectors):
+        """Create a compound selector from an iterable of simple selectors."""
+        self.selectors = tuple(selectors)
+        if not self.selectors:
+            raise ValueError("A selector sequence cannot be empty")
+        self.priority = sum(selector.priority for selector in self.selectors)
+
+    def matches(self, node):
+        """Return whether every selector matches ``node``."""
+        return all(selector.matches(node) for selector in self.selectors)
+
+
 def cascade_priority(rule):
     """Return the selector priority used to order a CSS rule."""
     selector, _ = rule
