@@ -40,6 +40,11 @@ class DescendantSelector:
         self.ancestor = ancestor
         self.descendant = descendant
         self.priority = ancestor.priority + descendant.priority
+
+        if isinstance(ancestor, DescendantSelector):
+            self.selectors = ancestor.selectors + (descendant,)
+        else:
+            self.selectors = (ancestor, descendant)
         
     def matches(self, node):
         """Return whether ``node`` matches below the selected ancestor.
@@ -53,11 +58,17 @@ class DescendantSelector:
         Returns:
             ``True`` if both selector conditions are met; otherwise, ``False``.
         """
-        if not self.descendant.matches(node):
+        selector_index = len(self.selectors) - 1
+        if not self.selectors[selector_index].matches(node):
             return False
-        while node.parent:
-            if self.ancestor.matches(node.parent):
-                return True
+
+        selector_index -= 1
+        node = node.parent
+        while node is not None:
+            if self.selectors[selector_index].matches(node):
+                selector_index -= 1
+                if selector_index < 0:
+                    return True
             node = node.parent
         return False
     
