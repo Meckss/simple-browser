@@ -18,26 +18,34 @@ class CSSParser:
     
     
     def word(self):
-        """
-        Parse and returns the word starting at the current index
-        
-        Returns:
-            str: The parsed word
-            
-        Raises: 
-            ValueError: If no word is found at the current index
-        """
-        
+        """Parse a CSS identifier/token."""
         start = self.i
-        while self.i < len(self.s):
-            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
-                self.i += 1
-            else: 
-                break
-        if not self.i > start:
+        while self.i < len(self.s) and (
+            self.s[self.i].isalnum() or self.s[self.i] in "#-.%"
+        ):
+            self.i += 1
+        if self.i == start:
             raise ValueError("Word parsing error")
         return self.s[start:self.i]
-    
+
+    def value(self):
+        """
+        Parse and returns the value starting at the current index
+
+        Returns:
+            str: The parsed value
+
+        Raises:
+            ValueError: If no value is found at the current index
+        """
+
+        start = self.i
+        while self.i < len(self.s) and self.s[self.i] not in ";}":
+            self.i += 1
+        if not self.i > start:
+            raise ValueError("Value parsing error")
+        return self.s[start:self.i].strip()
+
     def literal(self, literal):
         """
         Parses and moves the index to after the input literal
@@ -73,7 +81,11 @@ class CSSParser:
         self.whitespace()
         self.literal(":")
         self.whitespace()
-        val = self.word()
+
+        val = self.value()
+        if not val:
+            raise ValueError("Missing property value")
+
         return prop.casefold(), val
     
     def body(self):

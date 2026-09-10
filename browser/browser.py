@@ -37,6 +37,7 @@ class Browser:
         self.scroll = 0
         self.text = ""
         self.layout = None
+        self._layout_width = None
         
         self.canvas.bind("<Configure>", self.resize)
         self.window.bind("<Down>", lambda e: self.scroll_page(SCROLL_STEP))
@@ -66,7 +67,12 @@ class Browser:
         self.draw()
 
     def make_layout(self, body, width, page = None):
-        """Parse, style, and lay out a document for the viewport width."""
+        """Parse, style, and lay out a document for the viewport width.
+
+        Recording ``width`` lets :meth:`resize` ignore duplicate configure
+        events that do not require reflow.
+        """
+        self._layout_width = width
         root = HTMLParser(body).parse_html()
         rules = DEFAULT_STYLE_SHEET.copy()
         links = [node.attributes["href"]
@@ -89,8 +95,15 @@ class Browser:
         self.layout.layout()
     
     def resize(self, event):
-        """Reflow the current document after the canvas is resized."""
+        """Reflow the current document after the canvas is resized.
+
+        Tk can report a configure event immediately after the first render;
+        events for the current layout width are ignored to avoid duplicate
+        parsing and layout work.
+        """
         if event.width <= 0 or not self.text:
+            return
+        if event.width == self._layout_width:
             return
         self.make_layout(self.text, event.width, self.page)
         self.scroll = max(0, min(self.scroll, self.max_scroll()))

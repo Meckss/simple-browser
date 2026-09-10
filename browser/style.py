@@ -21,7 +21,11 @@ class StyleResolver:
     """
 
     def __init__(self, rules):
-        self.rules = rules
+        """Prepare rules, expanding stylesheet shorthands once."""
+        self.rules = [
+            (selector, expand_declarations(declarations))
+            for selector, declarations in rules
+        ]
 
     def apply(self, node):
         """Apply computed styles to ``node`` and all of its descendants."""
@@ -52,7 +56,8 @@ class StyleResolver:
 
     def _apply_inline_style(self, node):
         if "style" in node.attributes:
-            node.style.update(CSSParser(node.attributes["style"]).body())
+            declarations = CSSParser(node.attributes["style"]).body()
+            node.style.update(expand_declarations(declarations))
 
     def _resolve_font_size(self, node):
         value = node.style["font-size"]
@@ -65,3 +70,65 @@ class StyleResolver:
 def style(node, rules):
     """Apply stylesheet and inline CSS declarations to an element subtree."""
     StyleResolver(rules).apply(node)
+
+def expand_declarations(declarations):
+    """Expand supported CSS shorthand declarations into longhand values.
+
+    The returned dictionary is safe to reuse while styling multiple nodes;
+    stylesheet declarations are therefore expanded once by ``StyleResolver``.
+    """
+    expanded = {}
+
+    for prop, value in declarations.items():
+        if prop == "font":
+            expanded.update(expand_font_shorthand(value))
+        else:
+            expanded[prop] = value
+
+    return expanded
+
+def expand_font_shorthand(value):
+    """Convert a CSS ``font`` shorthand value into longhand properties.
+
+    Supported optional components are font style and weight, followed by a
+    required size and family. A line-height after the size is accepted and
+    ignored because layout does not currently use it.
+
+    Raises:
+        ValueError: If the size or family is missing.
+    """
+    FONT_STYLES = {"normal", "italic", "oblique"}
+    FONT_WEIGHTS = {"normal", "bold", "bolder", "lighter"}
+
+    tokens = value.split()
+
+    style = "normal"
+    weight = "normal"
+
+    while tokens and tokens[0] in FONT_STYLES | FONT_WEIGHTS:
+        token = tokens.pop(0)
+
+        if token in FONT_STYLES:
+            style = token
+        else:
+            weight = token
+
+    if not tokens:
+        raise ValueError("font shorthand is missing font-size")
+
+    size = tokens.pop(0)
+
+    if "/" in size:
+        size, _line_height = size.split("/", 1)
+
+    if not tokens:
+        raise ValueError("font shorthand is missing font-family")
+
+    family = " ".join(tokens)
+
+    return {
+        "font-style": style,
+        "font-weight": weight,
+        "font-size": size,
+        "font-family": family
+    }

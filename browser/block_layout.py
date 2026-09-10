@@ -9,6 +9,8 @@ from .draw import DrawRect
 from .draw import DrawText
 from .layout_constants import HSTEP, PARAGRAPH_STEP, VSTEP
 from .css_utils import css_size_to_px
+
+FONT_CACHE = {}
     
 class BlockLayout:
     """Lay out one block of the document tree and produce paint commands."""
@@ -26,7 +28,6 @@ class BlockLayout:
         self.display_list = []
         self.cursor_x = 0
         self.cursor_y = 0
-        self.fonts = {}
         self.line = []
         
     def layout_mode(self):
@@ -194,7 +195,12 @@ class BlockLayout:
         self.cursor_y += PARAGRAPH_STEP
 
     def get_font(self, node):
-        """Return a cached font matching the node's computed text styles."""
+        """Return a shared font matching the node's computed text styles.
+
+        The cache is shared across layout blocks because a document can have
+        many blocks using the same computed font. The key includes every
+        style value that affects Tk font construction.
+        """
         styles = getattr(node, "style", {})
         size = styles.get("font-size", "16px")
         size = int(round(css_size_to_px(size)))
@@ -207,6 +213,6 @@ class BlockLayout:
         family = styles.get("font-family", "Times")
 
         key = (family, size, weight, slant)
-        if key not in self.fonts:
-            self.fonts[key] = Font(family, size, weight, slant)
-        return self.fonts[key]
+        if key not in FONT_CACHE:
+            FONT_CACHE[key] = Font(family, size, weight, slant)
+        return FONT_CACHE[key]
