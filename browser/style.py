@@ -2,6 +2,7 @@
 
 from .css_parser import CSSParser
 from .element import Element
+from .css_utils import css_size_to_px
 
 INHERITED_PROPERTIES = {
     "font-family" : "Times",
@@ -53,13 +54,10 @@ class StyleResolver:
 
     def _resolve_font_size(self, node):
         value = node.style["font-size"]
-        if not value.endswith("%"):
-            return
         parent_style = getattr(node.parent, "style", {}) if node.parent else {}
         parent_size = parent_style.get("font-size", INHERITED_PROPERTIES["font-size"])
-        percentage = float(value[:-1]) / 100
-        pixels = float(parent_size[:-2])
-        node.style["font-size"] = f"{percentage * pixels}px"
+        reference = css_size_to_px(parent_size)
+        node.style["font-size"] = f"{css_size_to_px(value, reference)}px"
 
 
 def style(node, rules):

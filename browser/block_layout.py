@@ -8,6 +8,7 @@ from .element import Element
 from .draw import DrawRect
 from .draw import DrawText
 from .layout_constants import BLOCK_ELEMENTS, HSTEP, PARAGRAPH_STEP, VSTEP
+from .css_utils import css_size_to_px
     
 class BlockLayout:
     """Lay out one block of the document tree and produce paint commands."""
@@ -53,15 +54,19 @@ class BlockLayout:
             else self.parent.y
         )
         width = styles.get("width")
-        if width and width.endswith("px"):
-            self.width = float(width[:-2])
-        else:
-            self.width = self.parent.width
-            
+        self.width = (
+            css_size_to_px(width, self.parent.width)
+            if width
+            else self.parent.width
+        )
+        
         height = styles.get("height")
         explicit_height = None
-        if height and height.endswith("px"):
-            explicit_height = float(height[:-2])
+        if height:
+            parent_height = self.parent.height
+            reference = parent_height if height.strip().endswith("%") else None
+            if reference is not None or not height.strip().endswith("%"):
+                explicit_height = css_size_to_px(height, reference)
         
         mode = self.layout_mode()
         if mode == "block":
@@ -182,9 +187,7 @@ class BlockLayout:
         """Return a cached font matching the node's computed text styles."""
         styles = getattr(node, "style", {})
         size = styles.get("font-size", "16px")
-        if isinstance(size, str) and size.endswith("px"):
-            size = float(size[:-2])
-        size = int(round(float(size)))
+        size = int(round(css_size_to_px(size)))
 
         weight = styles.get("font-weight", "normal")
         slant = styles.get("font-style", "normal")
