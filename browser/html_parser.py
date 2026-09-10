@@ -1,16 +1,42 @@
 """Small, forgiving HTML parser that builds an element and text tree."""
 
-import html
 import re
 
 from .text import Text
 from .element import Element
 from .html_constants import (
     HEAD_TAGS,
+    HTML_ENTITIES,
     IMPLICITLY_CLOSED_BY_SAME_TAG,
+    LEGACY_ENTITIES,
     RAW_TEXT_TAGS,
     SELF_CLOSING_TAGS,
 )
+
+
+def unescape(text):
+    """Replace HTML character references."""
+    reference = re.compile(r"&(#(?:x[0-9a-f]+|[0-9]+)|[a-z][a-z0-9]+)(;?)",
+                           re.IGNORECASE)
+
+    def replace(match):
+        value = match.group(1)
+        has_semicolon = bool(match.group(2))
+        if value[0] == "#":
+            number = value[1:]
+            try:
+                codepoint = int(number[1:], 16) if number[0].lower() == "x" \
+                    else int(number, 10)
+                return chr(codepoint) if codepoint <= 0x10ffff else "\ufffd"
+            except (ValueError, OverflowError):
+                return match.group(0)
+
+        name = value.lower()
+        if name in HTML_ENTITIES and (has_semicolon or name in LEGACY_ENTITIES):
+            return HTML_ENTITIES[name]
+        return match.group(0)
+
+    return reference.sub(replace, text)
 
 class HTMLParser:
     """Parse HTML while supplying a few browser-style implicit elements."""
@@ -68,7 +94,7 @@ class HTMLParser:
         if not self.unfinished:
             return
         parent = self.unfinished[-1]
-        node = Text(html.unescape(text), parent)
+        node = Text(unescape(text), parent)
         parent.children.append(node)
         
     def add_tag(self, tag):
@@ -128,7 +154,7 @@ class HTMLParser:
                 key, value = attrpair.split("=", 1)
                 if len(value) > 1 and value[0] in ("'", '"') and value[-1] == value[0]:
                     value = value[1:-1]
-                attributes[key.casefold()] = html.unescape(value)
+                attributes[key.casefold()] = unescape(value)
             else:
                 attributes[attrpair.casefold()] = ""
 
