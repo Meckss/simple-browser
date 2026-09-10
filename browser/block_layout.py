@@ -45,17 +45,32 @@ class BlockLayout:
         
     def layout(self):
         """Compute this object's position, dimensions, and child layouts."""
+        styles = getattr(self.node, "style", {})
         self.x = self.parent.x
-        self.width = self.parent.width
-        if self.previous:
-            self.y = self.previous.y + self.previous.height
+        self.y = (
+            self.previous.y + self.previous.height 
+            if self.previous is not None
+            else self.parent.y
+        )
+        width = styles.get("width")
+        if width and width.endswith("px"):
+            self.width = float(width[:-2])
         else:
-            self.y = self.parent.y
+            self.width = self.parent.width
+            
+        height = styles.get("height")
+        explicit_height = None
+        if height and height.endswith("px"):
+            explicit_height = float(height[:-2])
+        
         mode = self.layout_mode()
         if mode == "block":
             self._layout_block_children()
         else:
             self._layout_inline_content()
+
+        if explicit_height is not None:
+            self.height = explicit_height
 
     def _layout_block_children(self):
         """Create and lay out this block's child layout objects in order."""
