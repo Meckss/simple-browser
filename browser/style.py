@@ -14,6 +14,69 @@ INHERITED_PROPERTIES = {
     "color": "black"
 }
 
+VAR_FUNCTION = re.compile(r"var\(", re.IGNORECASE)
+
+
+def _is_custom_property(prop):
+    """Return whether *prop* is a CSS custom property name."""
+    return prop.startswith("--")
+
+
+def _split_var_arguments(arguments):
+    """Split a var() argument into its name and optional fallback."""
+    depth = 0
+    for index, char in enumerate(arguments):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            return arguments[:index].strip(), arguments[index + 1:].strip()
+    return arguments.strip(), None
+
+
+def _substitute_vars(value, custom_properties, resolving=None):
+    """Substitute CSS var() functions, returning None for invalid values."""
+    resolving = set() if resolving is None else resolving
+    output = []
+    index = 0
+    while index < len(value):
+        match = VAR_FUNCTION.search(value, index)
+        if match is None:
+            output.append(value[index:])
+            break
+
+        output.append(value[index:match.start()])
+        open_paren = match.end() - 1
+        depth = 1
+        close_paren = open_paren + 1
+        while close_paren < len(value) and depth:
+            if value[close_paren] == "(":
+                depth += 1
+            elif value[close_paren] == ")":
+                depth -= 1
+            close_paren += 1
+        if depth:
+            return None
+
+        name, fallback = _split_var_arguments(
+            value[open_paren + 1:close_paren - 1]
+        )
+        if name in custom_properties and name not in resolving:
+            replacement = _substitute_vars(
+                custom_properties[name], custom_properties, resolving | {name}
+            )
+        else:
+            replacement = fallback
+            if replacement is not None and "var(" in replacement.lower():
+                replacement = _substitute_vars(replacement, custom_properties,
+                                               resolving)
+        if replacement is None:
+            return None
+        output.append(replacement)
+        index = close_paren
+    return "".join(output)
+
 class StyleResolver:
     """Resolve computed styles for an element tree.
 
@@ -37,6 +100,7 @@ class StyleResolver:
         node.style = self._inherited_style(node)
         winners = self._apply_rules(node)
         self._apply_inline_style(node, winners)
+        self._resolve_custom_properties(node)
         self._resolve_font_size(node)
 
         for child in node.children:
@@ -48,6 +112,10 @@ class StyleResolver:
             prop: parent_style.get(prop, default)
             for prop, default in INHERITED_PROPERTIES.items()
         }
+        style.update({
+            prop: value for prop, value in parent_style.items()
+            if _is_custom_property(prop)
+        })
         style["display"] = "inline"
         return style
 
@@ -72,6 +140,44 @@ class StyleResolver:
                 priority = (int(important), 1, 0, len(self.rules))
                 if prop not in winners or priority >= winners[prop][0]:
                     node.style[prop] = value
+
+    def _resolve_custom_properties(self, node):
+        """Resolve var() references in declarations on the styled element."""
+        custom_properties = {
+            prop: value for prop, value in node.style.items()
+            if _is_custom_property(prop)
+        }
+        for prop, value in list(custom_properties.items()):
+            resolved = _substitute_vars(value, custom_properties, {prop})
+            if resolved is None:
+                node.style.pop(prop, None)
+                custom_properties.pop(prop, None)
+            else:
+                node.style[prop] = resolved
+                custom_properties[prop] = resolved
+
+        for prop, value in list(node.style.items()):
+            if not _is_custom_property(prop) and "var(" in value.lower():
+                resolved = _substitute_vars(value, custom_properties)
+                if resolved is None:
+                    inherited = self._inherited_style(node)
+                    if prop in inherited:
+                        node.style[prop] = inherited[prop]
+                    else:
+                        node.style.pop(prop, None)
+                else:
+                    if prop == "font":
+                        try:
+                            expanded = expand_font_shorthand(resolved)
+                        except ValueError:
+                            expanded = None
+                        if expanded is None:
+                            node.style.pop(prop, None)
+                        else:
+                            node.style.pop(prop)
+                            node.style.update(expanded)
+                    else:
+                        node.style[prop] = resolved
 
     def _resolve_font_size(self, node):
         value = node.style["font-size"]
@@ -103,7 +209,8 @@ def _expand_declarations_with_importance(declarations):
         value, important = _split_important(raw_value)
         values = (
             expand_font_shorthand(value)
-            if prop == "font" else {prop: value}
+            if prop == "font" and "var(" not in value.lower()
+            else {prop: value}
         )
         for expanded_prop, expanded_value in values.items():
             expanded[expanded_prop] = (expanded_value, important)

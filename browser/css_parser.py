@@ -33,7 +33,7 @@ class CSSParser:
         """Parse a CSS identifier/token."""
         start = self.i
         while self.i < len(self.s) and (
-            self.s[self.i].isalnum() or self.s[self.i] in "#-.%"
+            self.s[self.i].isalnum() or self.s[self.i] in "#-._%"
         ):
             self.i += 1
         if self.i == start:
@@ -98,7 +98,8 @@ class CSSParser:
         if not val:
             raise ValueError("Missing property value")
 
-        return prop.casefold(), CSSValue(
+        prop = prop if prop.startswith("--") else prop.casefold()
+        return prop, CSSValue(
             val,
             re.search(r"!\s*important\s*$", val, re.IGNORECASE) is not None
         )
