@@ -47,7 +47,9 @@ class Browser:
         self.window.bind("<MouseWheel>", self.mouse_scroll)
 
         self.window.bind("<Button-4>", lambda e: self.scroll_page(-SCROLL_STEP))
-        self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP))   
+        self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP)) 
+        
+        self.window.bind("<Button-1>", self.click)  
              
     def render_text(self, text, reset_scroll=True, page=None):
         """Render HTML text, optionally retaining the current scroll position."""
@@ -175,6 +177,22 @@ class Browser:
 
         self.scroll = max(0, min(self.scroll, maximum))
         self.draw()
+        
+    def click(self, e):
+        x, y = e.x, e.y
+        y += self.scroll
+        objs = [obj for obj in tree_to_list(self.layout, [])
+                if obj.x <= obj.x < obj.x + obj.width
+                and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                pass
+            elif elt.tag == "a" and "href" in elt.attributes:
+                url = self.page.resolve(elt.attributes["href"])
+                return self.load(url.original_url)
+            elt = elt.parent
         
     def draw(self):
         """Paint visible display commands onto the canvas."""
