@@ -1,0 +1,175 @@
+"""Document loading, styling, layout, and hit testing for a browser tab."""
+
+from pathlib import Path
+
+from .page import Page
+from .element import Element
+from .text import Text
+from .document_layout import DocumentLayout
+from .html_parser import HTMLParser
+from .style import style
+from .css_parser import CSSParser
+from .tree_utils import tree_to_list
+from .selector import cascade_priority
+from .ui_constants import WIDTH
+STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
+DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
+
+class Tab:
+    """Own the document displayed in one browser tab."""
+    def __init__(self):
+        """Create an empty tab."""
+        self.page = None
+        self.text = ""
+        self.layout = None
+        self._layout_width = None
+
+    def render_text(self, text, page=None):
+        """Parse and lay out HTML text."""
+        self.text = text
+        self.page = page
+
+        self.make_layout(text, self._layout_width or WIDTH, page)
+        self.display_list = []
+        paint_tree(self.layout, self.display_list)
+
+    def make_layout(self, body, width, page = None):
+        """Parse, style, and lay out a document for the viewport width.
+
+        Recording ``width`` lets :meth:`resize` ignore duplicate configure
+        events that do not require reflow.
+        """
+        self._layout_width = width
+        root = HTMLParser(body).parse_html()
+        rules = DEFAULT_STYLE_SHEET.copy()
+
+        for node in tree_to_list(root, []):
+            if not isinstance(node, Element):
+                continue
+            if node.tag == "style":
+                stylesheet = "".join(
+                    child.text for child in node.children
+                    if isinstance(child, Text)
+                )
+                rules.extend(CSSParser(stylesheet).parse())
+            elif (
+                node.tag == "link"
+                and node.attributes.get("rel") == "stylesheet"
+                and "href" in node.attributes
+                and page is not None
+            ):
+                style_url = page.resolve(node.attributes["href"])
+                try:
+                    stylesheet = style_url.request()
+                except OSError:
+                    continue
+                rules.extend(CSSParser(stylesheet).parse())
+
+        style(root, sorted(rules, key = cascade_priority))
+        self.layout = DocumentLayout(root, width)
+        self.layout.layout()
+    
+    def resize(self, width):
+        """Reflow the current document after the viewport is resized.
+
+        Repeated resize notifications for the current layout width are
+        ignored to avoid duplicate parsing and layout work.
+        """
+        if width <= 0 or not self.text or width == self._layout_width:
+            return
+        self.make_layout(self.text, width, self.page)
+        self.display_list = []
+        paint_tree(self.layout, self.display_list)
+    def click(self, x, y, scroll=0):
+        """Follow a link hit at viewport coordinates ``x``, ``y``.
+
+        Returns:
+            bool: Whether the click navigated to another URL.
+        """
+        y += scroll
+        objs = [obj for obj in tree_to_list(self.layout, [])
+                if obj.x <= x < obj.x + obj.width
+                and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                pass
+            elif elt.tag == "a" and "href" in elt.attributes:
+                url = self.page.resolve(elt.attributes["href"])
+                self.load(url.original_url)
+                return True
+            elt = elt.parent
+        return False
+        
+    def draw(self, canvas, scroll=0):
+        """Paint visible display commands onto ``canvas``."""
+        canvas_height = canvas.winfo_height()
+
+        for cmd in self.display_list:
+            if cmd.top > scroll + canvas_height: continue
+            if cmd.bottom < scroll: continue
+            cmd.execute(scroll, canvas)
+        
+    def show_error(self, title, error):
+        """Render a user-facing error page with the supplied message."""
+        error_text = (
+            f"{title}\n\n"
+            f"{error}\n\n"
+            "Usage:\n"
+            "  python browser.py <url>\n\n"
+            "Supported URLs:\n"
+            "  http://example.com\n"
+            "  https://example.com\n"
+            "  file:///path/to/file\n"
+            "  data:text/plain,Hello"
+        )
+        
+        self.render_text(error_text)
+    
+    def load(self, url):
+        """Fetch and render ``url``, showing supported load errors in the UI."""
+        try:
+            page, body = load_page(Page(url))
+            self.render_text(body, page=page)
+            
+        except (OSError, ValueError, RuntimeError) as error:
+            self.show_error("Unable to load page", str(error))
+        
+        
+def load_page(page, max_redirects = 10):
+    """Request a page and follow redirects up to ``max_redirects`` times.
+
+    Returns:
+        tuple[Page, str]: The final page object and its response body.
+
+    Raises:
+        RuntimeError: If the redirect limit is exceeded.
+    """
+    redirects_followed = 0
+    while True:
+        body = page.request()
+        
+        if page.redirect_url is None:
+            break
+        
+        if redirects_followed >= max_redirects:
+            raise RuntimeError(
+                f"too many redirects, limit is {max_redirects}"
+            )
+        
+        redirects_followed += 1
+        next_page = page.redirect_url
+        
+        if page.view_source and not next_page.startswith("view-source:"):
+            next_page = "view-source:" + next_page
+        
+        page = Page(next_page)
+    return page, body
+
+def paint_tree(layout_object, display_list):
+    """Append paint commands for a layout tree in pre-order."""
+    display_list.extend(layout_object.paint())
+    
+    for child in layout_object.children:
+        paint_tree(child, display_list)

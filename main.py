@@ -12,7 +12,7 @@ def main():
         sys.exit(1)
 
     browser = Browser()
-    browser.load(sys.argv[1])
+    browser.new_tab(sys.argv[1])
     browser.window.mainloop()
 
 

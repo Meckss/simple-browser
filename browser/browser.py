@@ -1,269 +1,108 @@
-"""Tkinter user interface and document-loading orchestration."""
+"""Tkinter user interface and tab management for the browser."""
 
 import tkinter
-from pathlib import Path
 
-from .page import Page
-from .element import Element
-from .text import Text
-from .document_layout import DocumentLayout
-from .html_parser import HTMLParser
-from .style import style
-from .css_parser import CSSParser
-from .tree_utils import tree_to_list
-from .selector import cascade_priority
+from .tab import Tab
 from .ui_constants import HEIGHT, SCROLL_STEP, WIDTH
-STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
-DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 
 class Browser:
-    """Display parsed pages in a scrollable Tkinter window."""
+    """Manage browser tabs, the shared viewport, and user input."""
+
     def __init__(self):
-        """Create the window, canvas, scrollbar, and input bindings."""
+        """Create the browser window and install its event handlers."""
+        self.tabs = []
+        self.active_tab = None
         self.window = tkinter.Tk()
-        self.page = None
-        self.canvas = tkinter.Canvas(
-            self.window,
-            width = WIDTH,
-            height = HEIGHT,
-            bg = "pink"
-        )
-        self.canvas.pack(side = "left", fill = "both", expand = True)
+        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT,
+                                     bg="pink")
+        self.canvas.pack(side="left", fill="both", expand=True)
         self.scroll_bar = tkinter.Scrollbar(
-            self.window,
-            orient="vertical",
-            command = self.scroll_bar_scroll
+            self.window, orient="vertical", command=self.scroll_bar_scroll
         )
-        self.scroll_bar.pack(side = "right", fill = "y")
+        self.scroll_bar.pack(side="right", fill="y")
         self.scroll = 0
-        self.text = ""
-        self.layout = None
-        self._layout_width = None
-        
         self.canvas.bind("<Configure>", self.resize)
-        self.window.bind("<Down>", lambda e: self.scroll_page(SCROLL_STEP))
+        self.window.bind("<Down>", self.handle_down)
         self.window.bind("<Up>", lambda e: self.scroll_page(-SCROLL_STEP))
-
         self.window.bind("<MouseWheel>", self.mouse_scroll)
-
         self.window.bind("<Button-4>", lambda e: self.scroll_page(-SCROLL_STEP))
-        self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP)) 
-        
-        self.window.bind("<Button-1>", self.click)  
-             
-    def render_text(self, text, reset_scroll=True, page=None):
-        """Render HTML text, optionally retaining the current scroll position."""
-        self.text = text
-        self.page = page
+        self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP))
+        self.window.bind("<Button-1>", self.handle_click)
 
-        width = self.canvas.winfo_width()
-        if width <= 0:
-            width = WIDTH
+    def handle_down(self, e):
+        """Scroll the active document down by one keyboard unit."""
+        self.scroll_page(SCROLL_STEP)
 
-        self.make_layout(text, width, page)
-
-        if reset_scroll:
+    def handle_click(self, e):
+        """Forward a canvas click to the active tab and redraw the page."""
+        navigated = self.active_tab.click(e.x, e.y, self.scroll)
+        if navigated:
             self.scroll = 0
-
-        self.display_list = []
-        paint_tree(self.layout, self.display_list)
         self.draw()
 
-    def make_layout(self, body, width, page = None):
-        """Parse, style, and lay out a document for the viewport width.
+    def new_tab(self, url):
+        """Create, load, and activate a tab for ``url``."""
+        new_tab = Tab()
+        new_tab.load(url)
+        self.active_tab = new_tab
+        self.tabs.append(new_tab)
+        self.scroll = 0
+        self.draw()
 
-        Recording ``width`` lets :meth:`resize` ignore duplicate configure
-        events that do not require reflow.
-        """
-        self._layout_width = width
-        root = HTMLParser(body).parse_html()
-        rules = DEFAULT_STYLE_SHEET.copy()
-
-        for node in tree_to_list(root, []):
-            if not isinstance(node, Element):
-                continue
-            if node.tag == "style":
-                stylesheet = "".join(
-                    child.text for child in node.children
-                    if isinstance(child, Text)
-                )
-                rules.extend(CSSParser(stylesheet).parse())
-            elif (
-                node.tag == "link"
-                and node.attributes.get("rel") == "stylesheet"
-                and "href" in node.attributes
-                and page is not None
-            ):
-                style_url = page.resolve(node.attributes["href"])
-                try:
-                    stylesheet = style_url.request()
-                except OSError:
-                    continue
-                rules.extend(CSSParser(stylesheet).parse())
-
-        style(root, sorted(rules, key = cascade_priority))
-        self.layout = DocumentLayout(root, width)
-        self.layout.layout()
-    
     def resize(self, event):
-        """Reflow the current document after the canvas is resized.
+        """Relayout the active tab when the viewport width changes."""
+        if self.active_tab is None or event.width <= 0:
+            return
+        self.active_tab.resize(event.width)
+        self.scroll = max(0, min(self.scroll, self.max_scroll()))
+        self.draw()
 
-        Tk can report a configure event immediately after the first render;
-        events for the current layout width are ignored to avoid duplicate
-        parsing and layout work.
-        """
-        if event.width <= 0 or not self.text:
-            return
-        if event.width == self._layout_width:
-            return
-        self.make_layout(self.text, event.width, self.page)
-        self.scroll = max(0, min(self.scroll, self.max_scroll()))
-        self.display_list = []
-        paint_tree(self.layout, self.display_list)
-        self.draw()
-        
     def scroll_page(self, amount):
-        """Move the viewport by ``amount`` pixels and redraw it."""
-        self.scroll += amount
-        self.scroll = max(0, min(self.scroll, self.max_scroll()))
+        """Move the viewport by ``amount`` pixels, within valid bounds."""
+        self.scroll = max(0, min(self.scroll + amount, self.max_scroll()))
         self.draw()
-    
-    
+
     def mouse_scroll(self, event):
         """Translate a mouse-wheel event into a vertical scroll."""
-        if event.delta > 0:
-            self.scroll_page(-SCROLL_STEP)
-        else:
-            self.scroll_page(SCROLL_STEP)
-        
+        self.scroll_page(-SCROLL_STEP if event.delta > 0 else SCROLL_STEP)
+
     def max_scroll(self):
-        """Return the greatest valid vertical scroll offset."""
-        if self.layout is None:
+        """Return the greatest valid scroll offset for the active tab."""
+        if self.active_tab is None or self.active_tab.layout is None:
             return 0
-        
-        canvas_height = self.canvas.winfo_height()
-        
-        return max(0, self.layout.height - canvas_height)
-    
+        return max(0, self.active_tab.layout.height - self.canvas.winfo_height())
+
     def update_scroll_bar(self):
-        """Update the scrollbar thumb to reflect the current viewport."""
+        """Update the scrollbar thumb to match the current viewport."""
         canvas_height = self.canvas.winfo_height()
         maximum = self.max_scroll()
-        
         if maximum == 0:
-            self.scroll_bar.set(0,1)
+            self.scroll_bar.set(0, 1)
             return
-        
-        first = self.scroll / (maximum + canvas_height)
-        last = (self.scroll + canvas_height) / (maximum + canvas_height)
-        
-        self.scroll_bar.set(first, last)
-    
+        self.scroll_bar.set(
+            self.scroll / (maximum + canvas_height),
+            (self.scroll + canvas_height) / (maximum + canvas_height),
+        )
+
     def scroll_bar_scroll(self, *args):
-        """Handle Tkinter scrollbar commands and redraw the document."""
+        """Apply a Tkinter scrollbar command and redraw the document."""
         canvas_height = self.canvas.winfo_height()
         maximum = self.max_scroll()
-        
         if args[0] == "moveto":
             self.scroll = float(args[1]) * (maximum + canvas_height)
-
         elif args[0] == "scroll":
             amount = int(args[1])
-
             if args[2] == "units":
                 self.scroll += amount * SCROLL_STEP
             elif args[2] == "pages":
                 self.scroll += amount * canvas_height
-
         self.scroll = max(0, min(self.scroll, maximum))
         self.draw()
-        
-    def click(self, e):
-        x, y = e.x, e.y
-        y += self.scroll
-        objs = [obj for obj in tree_to_list(self.layout, [])
-                if obj.x <= obj.x < obj.x + obj.width
-                and obj.y <= y < obj.y + obj.height]
-        if not objs: return
-        elt = objs[-1].node
-        while elt:
-            if isinstance(elt, Text):
-                pass
-            elif elt.tag == "a" and "href" in elt.attributes:
-                url = self.page.resolve(elt.attributes["href"])
-                return self.load(url.original_url)
-            elt = elt.parent
-        
+
     def draw(self):
-        """Paint visible display commands onto the canvas."""
+        """Draw the active tab at the browser's current scroll offset."""
         self.canvas.delete("all")
-        canvas_height = self.canvas.winfo_height()
-
-        for cmd in self.display_list:
-            if cmd.top > self.scroll + canvas_height: continue
-            if cmd.bottom < self.scroll: continue
-            cmd.execute(self.scroll, self.canvas)
+        if self.active_tab is None:
+            return
+        self.active_tab.draw(self.canvas, self.scroll)
         self.update_scroll_bar()
-        
-    def show_error(self, title, error):
-        """Render a user-facing error page with the supplied message."""
-        error_text = (
-            f"{title}\n\n"
-            f"{error}\n\n"
-            "Usage:\n"
-            "  python browser.py <url>\n\n"
-            "Supported URLs:\n"
-            "  http://example.com\n"
-            "  https://example.com\n"
-            "  file:///path/to/file\n"
-            "  data:text/plain,Hello"
-        )
-        
-        self.render_text(error_text)
-    
-    def load(self, url):
-        """Fetch and render ``url``, showing supported load errors in the UI."""
-        try:
-            page, body = load_page(Page(url))
-            self.render_text(body, page=page)
-            
-        except (OSError, ValueError, RuntimeError) as error:
-            self.show_error("Unable to load page", str(error))
-        
-        
-def load_page(page, max_redirects = 10):
-    """Request a page and follow redirects up to ``max_redirects`` times.
-
-    Returns:
-        tuple[Page, str]: The final page object and its response body.
-
-    Raises:
-        RuntimeError: If the redirect limit is exceeded.
-    """
-    redirects_followed = 0
-    while True:
-        body = page.request()
-        
-        if page.redirect_url is None:
-            break
-        
-        if redirects_followed >= max_redirects:
-            raise RuntimeError(
-                f"too many redirects, limit is {max_redirects}"
-            )
-        
-        redirects_followed += 1
-        next_page = page.redirect_url
-        
-        if page.view_source and not next_page.startswith("view-source:"):
-            next_page = "view-source:" + next_page
-        
-        page = Page(next_page)
-    return page, body
-
-def paint_tree(layout_object, display_list):
-    """Append paint commands for a layout tree in pre-order."""
-    display_list.extend(layout_object.paint())
-    
-    for child in layout_object.children:
-        paint_tree(child, display_list)
