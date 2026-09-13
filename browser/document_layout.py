@@ -2,19 +2,16 @@
 
 from .block_layout import BlockLayout
 from .layout_constants import HSTEP, VSTEP
+from .layout import Layout
 
-class DocumentLayout:
+
+class DocumentLayout(Layout):
     """Provide the viewport-relative root layout around the document body."""
 
     def __init__(self, node, width):
         """Create a document layout for ``node`` and an available width."""
-        self.node = node
-        self.parent = None
-        self.children = []
-        self.x = None
-        self.y = None
+        super().__init__(node)
         self.width = width
-        self.height = None
         
     def layout(self):
         """Lay out the document with horizontal and vertical page margins."""

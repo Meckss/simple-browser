@@ -2,58 +2,46 @@
 
 import re
 
-from .font import Font
 from .text import Text
 from .element import Element
 from .draw import DrawRect
-from .draw import DrawText
 from .layout_constants import HSTEP, PARAGRAPH_STEP, VSTEP
 from .css_utils import css_size_to_px
-
-FONT_CACHE = {}
-
+from .font_utils import get_font
+from .layout import Layout
+from .line_layout import LineLayout
+from .text_layout import TextLayout
 
 def _is_auto(value):
     """Return whether a CSS value is the ``auto`` keyword."""
     return isinstance(value, str) and value.strip().lower() == "auto"
 
 
-def _font_weight_for_tk(weight):
-    """Map CSS font weights to the values accepted by Tk."""
-    if isinstance(weight, (int, float)):
-        return "bold" if weight >= 600 else "normal"
+class BlockLayout(Layout):
+    """Lay out one document node and produce its background paint commands.
 
-    value = str(weight).strip().lower()
-    if value in {"bold", "bolder"}:
-        return "bold"
-    if value in {"normal", "lighter"}:
-        return "normal"
-
-    try:
-        return "bold" if  int(value) >= 600 else "normal"
-    except ValueError:
-        return "normal"
-    
-class BlockLayout:
-    """Lay out one block of the document tree and produce paint commands."""
+    Block-level children are represented by nested :class:`BlockLayout`
+    instances. Inline content is represented by :class:`LineLayout` and
+    :class:`TextLayout` descendants.
+    """
 
     def __init__(self, node, parent, previous):
-        """Create a layout object for ``node``."""
-        self.node = node
-        self.parent = parent
-        self.previous = previous
-        self.children = []
-        self.x = None
-        self.y = None
-        self.width = None
-        self.height = None
-        self.display_list = []
+        """Create a layout object for a node in document order.
+
+        Args:
+            node: The parsed element or text node being laid out.
+            parent: The containing layout object.
+            previous: The preceding sibling layout, if any.
+        """
+        super().__init__(node, parent, previous)
         self.cursor_x = 0
-        self.cursor_y = 0
-        self.line = []
         
     def layout_mode(self):
-        """Return ``"block"`` or ``"inline"`` for this node's contents."""
+        """Return the layout mode required by this node's children.
+
+        A node containing a block-level child uses block layout; all other
+        nodes with content use inline layout.
+        """
         if isinstance(self.node, Text):
             return "inline"
 
@@ -69,7 +57,11 @@ class BlockLayout:
         return "block"
         
     def layout(self):
-        """Compute this object's position, dimensions, and child layouts."""
+        """Compute position, dimensions, and descendants for this node.
+
+        Hidden elements retain a zero-sized layout object so callers can use
+        the same layout-tree traversal for all nodes.
+        """
         if isinstance(self.node, Element) and self.node.style.get("display") == "none":
             self.x = self.parent.x
             self.y = self.parent.y
@@ -103,13 +95,25 @@ class BlockLayout:
         if mode == "block":
             self._layout_block_children()
         else:
-            self._layout_inline_content()
+            self.new_line()
+            self.process_tree(self.node)
+            for line in self.children:
+                line.layout()
 
         if explicit_height is not None:
             self.height = explicit_height
+        else:
+            self.height = sum(
+                child.height + getattr(child, "spacing_after", 0)
+                for child in self.children
+            )
 
     def _length_reference(self, value, percentage_reference):
-        """Return the reference needed to resolve a CSS length value."""
+        """Return the reference used to resolve a relative CSS length.
+
+        ``em`` values use the current element's font size, percentages use
+        ``percentage_reference``, and absolute values do not need a reference.
+        """
         if not isinstance(value, str):
             return percentage_reference
 
@@ -122,7 +126,7 @@ class BlockLayout:
         return None
 
     def _layout_block_children(self):
-        """Create and lay out this block's child layout objects in order."""
+        """Create and lay out visible block children in document order."""
         previous = None
         for child in self.node.children:
             if isinstance(child, Element) and child.style.get("display") == "none":
@@ -133,14 +137,12 @@ class BlockLayout:
             previous = next_child
         self.height = sum(child.height for child in self.children)
 
-    def _layout_inline_content(self):
-        """Lay out inline descendants into lines and calculate total height."""
-        self.process_tree(self.node)
-        self.flush()
-        self.height = self.cursor_y
-            
     def paint(self):
-        """Return drawing commands for this layout object and inline text."""
+        """Return the background drawing commands for this layout object.
+
+        Inline text is painted by descendant ``TextLayout`` objects during
+        the normal recursive paint-tree traversal.
+        """
         cmds = []
         if isinstance(self.node, Element):
             bgcolor = self.node.style.get("background-color", "transparent")
@@ -148,13 +150,14 @@ class BlockLayout:
                 x2, y2 = self.x + self.width, self.y + self.height
                 cmds.append(DrawRect(self.x, self.y, x2, y2, bgcolor))
 
-        if self.layout_mode() == "inline":
-            for x, y, word, font, color in self.display_list:
-                cmds.append(DrawText(x, y, word, font, color))
         return cmds
             
     def process_tree(self, tree):
-        """Traverse an inline subtree, applying tag and text layout behavior."""
+        """Traverse an inline subtree and build its line layout objects.
+
+        Args:
+            tree: The element or text node currently being processed.
+        """
         if isinstance(tree, Text):
             self.process_text(tree)
             return
@@ -167,87 +170,62 @@ class BlockLayout:
             self.process_tree(child)
         self.exit_tag(tree)
                 
-    def process_text(self, text):
-        """Wrap a text node into words and append them to the current line."""
-        content = re.sub(r"\s+", " ", text.text)
+    def process_text(self, text_node):
+        """Normalize, wrap, and append a text node's words to its lines.
+
+        Each word receives the computed font and color of its containing
+        element and becomes a ``TextLayout`` child of the current line.
+        """
+        content = re.sub(r"\s+", " ", text_node.text)
 
         for word in content.split():
-            color = text.parent.style["color"]
-            font = self.get_font(text.parent)
+            color = text_node.parent.style["color"]
+            font = get_font(text_node.parent)
             word_width = font.measure(word)
             space_width = font.measure(" ")
-
+            line = self.children[-1]
             required_width = word_width
-            if self.line:
+            if line.children:
                 required_width += space_width
 
-            if self.cursor_x + required_width > self.width - HSTEP:
-                self.flush()
+            if line.children and self.cursor_x + required_width > self.width - HSTEP:
+                self.new_line()
+                line = self.children[-1]
 
-            self.line.append((self.cursor_x, word, font, color))
+            previous_word = line.children[-1] if line.children else None
+            text = TextLayout(text_node, word, line, previous_word, font, color)
+            line.children.append(text)
+
             self.cursor_x += word_width + space_width
-                    
-    def flush(self):
-        """Place the current line in the display list and start a new line."""
-        if not self.line: return
-        metrics = [font.metrics() for x, word, font, color in self.line]
-        max_ascent = max([metric["ascent"] for metric in metrics])
-        
-        baseline = self.cursor_y + 1.25 * max_ascent
-        
-        for rel_x, word, font, color in self.line:
-            x = self.x + rel_x
-            y = self.y + baseline - font.metrics("ascent")
-            self.display_list.append((x,y,word,font,color))
-        
-        max_descent = max([metric["descent"] for metric in metrics])
-        self.cursor_y = baseline + 1.25 * max_descent
-        
-        self.cursor_x = 0
-        self.line = []
 
+    def new_line(self):
+        """Start a new inline line unless the current line is already empty."""
+        self.cursor_x = 0
+        last_line = self.children[-1] if self.children else None
+        if last_line is not None and not last_line.children:
+            return
+        new_line = LineLayout(self.node, self, last_line)
+        self.children.append(new_line)
     
     def enter_tag(self, tag):
-        """Apply layout behavior that occurs when entering an element."""
+        """Apply layout behavior associated with entering an inline tag."""
         handler = {"br": self._enter_line_break}.get(tag.tag)
         if handler:
             handler()
 
     def _enter_line_break(self):
-        """Finish the current line and advance by one line-height step."""
-        self.flush()
-        self.cursor_y += VSTEP
+        """Add line-break spacing and begin a following inline line."""
+        if self.children and self.children[-1].children:
+            self.children[-1].spacing_after += VSTEP
+        self.new_line()
 
     def exit_tag(self, tag):
-        """Apply layout behavior that occurs after an element's children."""
+        """Apply layout behavior associated with leaving an inline tag."""
         handler = {"p": self._exit_paragraph}.get(tag.tag)
         if handler:
             handler()
 
     def _exit_paragraph(self):
-        """Finish a paragraph and add the paragraph separation spacing."""
-        self.flush()
-        self.cursor_y += PARAGRAPH_STEP
-
-    def get_font(self, node):
-        """Return a shared font matching the node's computed text styles.
-
-        The cache is shared across layout blocks because a document can have
-        many blocks using the same computed font. The key includes every
-        style value that affects Tk font construction.
-        """
-        styles = getattr(node, "style", {})
-        size = styles.get("font-size", "16px")
-        size = int(round(css_size_to_px(size)))
-
-        weight = _font_weight_for_tk(styles.get("font-weight", "normal"))
-        slant = styles.get("font-style", "normal")
-        if slant == "normal":
-            slant = "roman"
-            
-        family = styles.get("font-family", "Times")
-
-        key = (family, size, weight, slant)
-        if key not in FONT_CACHE:
-            FONT_CACHE[key] = Font(family, size, weight, slant)
-        return FONT_CACHE[key]
+        """Add the configured separation after the current paragraph line."""
+        if self.children and self.children[-1].children:
+            self.children[-1].spacing_after += PARAGRAPH_STEP
