@@ -100,6 +100,7 @@ class StyleResolver:
         node.style = self._inherited_style(node)
         winners = self._apply_rules(node)
         self._apply_inline_style(node, winners)
+        self._resolve_inherit(node)
         self._resolve_custom_properties(node)
         self._resolve_font_size(node)
 
@@ -178,6 +179,21 @@ class StyleResolver:
                             node.style.update(expanded)
                     else:
                         node.style[prop] = resolved
+
+    def _resolve_inherit(self, node):
+        """Resolve explicit CSS ``inherit`` values after the cascade."""
+        parent_style = getattr(node.parent, "style", {}) if node.parent else {}
+
+        for prop, value in list(node.style.items()):
+            if not isinstance(value, str) or value.strip().lower() != "inherit":
+                continue
+
+            if prop in parent_style:
+                node.style[prop] = parent_style[prop]
+            elif prop in INHERITED_PROPERTIES:
+                node.style[prop] = INHERITED_PROPERTIES[prop]
+            else:
+                node.style.pop(prop, None)
 
     def _resolve_font_size(self, node):
         value = node.style["font-size"]

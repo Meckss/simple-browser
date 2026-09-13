@@ -11,6 +11,11 @@ from .layout_constants import HSTEP, PARAGRAPH_STEP, VSTEP
 from .css_utils import css_size_to_px
 
 FONT_CACHE = {}
+
+
+def _is_auto(value):
+    """Return whether a CSS value is the ``auto`` keyword."""
+    return isinstance(value, str) and value.strip().lower() == "auto"
     
 class BlockLayout:
     """Lay out one block of the document tree and produce paint commands."""
@@ -63,17 +68,17 @@ class BlockLayout:
             else self.parent.y
         )
         width = styles.get("width")
-        self.width = (
-            css_size_to_px(width, self.parent.width)
-            if width
-            else self.parent.width
-        )
+        if not width or _is_auto(width):
+            self.width = self.parent.width
+        else:
+            self.width = css_size_to_px(
+                width, self._length_reference(width, self.parent.width)
+            )
         
         height = styles.get("height")
         explicit_height = None
-        if height:
-            parent_height = self.parent.height
-            reference = parent_height if height.strip().endswith("%") else None
+        if height and not _is_auto(height):
+            reference = self._length_reference(height, self.parent.height)
             if reference is not None or not height.strip().endswith("%"):
                 explicit_height = css_size_to_px(height, reference)
         
@@ -85,6 +90,19 @@ class BlockLayout:
 
         if explicit_height is not None:
             self.height = explicit_height
+
+    def _length_reference(self, value, percentage_reference):
+        """Return the reference needed to resolve a CSS length value."""
+        if not isinstance(value, str):
+            return percentage_reference
+
+        unit = value.strip().lower()
+        if unit.endswith("em") and not unit.endswith("rem"):
+            styles = getattr(self.node, "style", {})
+            return css_size_to_px(styles.get("font-size", "16px"))
+        if unit.endswith("%"):
+            return percentage_reference
+        return None
 
     def _layout_block_children(self):
         """Create and lay out this block's child layout objects in order."""
