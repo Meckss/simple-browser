@@ -16,6 +16,23 @@ FONT_CACHE = {}
 def _is_auto(value):
     """Return whether a CSS value is the ``auto`` keyword."""
     return isinstance(value, str) and value.strip().lower() == "auto"
+
+
+def _font_weight_for_tk(weight):
+    """Map CSS font weights to the values accepted by Tk."""
+    if isinstance(weight, (int, float)):
+        return "bold" if weight >= 600 else "normal"
+
+    value = str(weight).strip().lower()
+    if value in {"bold", "bolder"}:
+        return "bold"
+    if value in {"normal", "lighter"}:
+        return "normal"
+
+    try:
+        return "bold" if  int(value) >= 600 else "normal"
+    except ValueError:
+        return "normal"
     
 class BlockLayout:
     """Lay out one block of the document tree and produce paint commands."""
@@ -223,7 +240,7 @@ class BlockLayout:
         size = styles.get("font-size", "16px")
         size = int(round(css_size_to_px(size)))
 
-        weight = styles.get("font-weight", "normal")
+        weight = _font_weight_for_tk(styles.get("font-weight", "normal"))
         slant = styles.get("font-style", "normal")
         if slant == "normal":
             slant = "roman"
