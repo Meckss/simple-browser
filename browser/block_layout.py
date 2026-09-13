@@ -147,9 +147,7 @@ class BlockLayout(Layout):
         if isinstance(self.node, Element):
             bgcolor = self.node.style.get("background-color", "transparent")
             if bgcolor != "transparent":
-                x2, y2 = self.x + self.width, self.y + self.height
-                cmds.append(DrawRect(self.x, self.y, x2, y2, bgcolor))
-
+                cmds.append(DrawRect(self.self_rect(), bgcolor))
         return cmds
             
     def process_tree(self, tree):

@@ -4,6 +4,8 @@ import tkinter
 
 from .tab import Tab
 from .ui_constants import HEIGHT, SCROLL_STEP, WIDTH
+from .font import Font
+from .draw import DrawLine, DrawOutline, Rect, DrawText, DrawRect
 
 class Browser:
     """Manage browser tabs, the shared viewport, and user input."""
@@ -13,6 +15,7 @@ class Browser:
         self.tabs = []
         self.active_tab = None
         self.window = tkinter.Tk()
+        self.chrome = Chrome(self)
         self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT,
                                      bg="pink")
         self.canvas.pack(side="left", fill="both", expand=True)
@@ -34,15 +37,28 @@ class Browser:
         self.scroll_page(SCROLL_STEP)
 
     def handle_click(self, e):
-        """Forward a canvas click to the active tab and redraw the page."""
-        navigated = self.active_tab.click(e.x, e.y, self.scroll)
+        """Route a canvas click to page content or the browser chrome.
+
+        Page coordinates are translated to account for the tab bar before
+        the active tab receives the click.
+        """
+        if self.active_tab is None:
+            return
+        navigated = self.active_tab.click(
+            e.x, e.y - self.chrome.bottom, self.scroll
+        )
         if navigated:
             self.scroll = 0
+        if e.y < self.chrome.bottom:
+            self.chrome.click(e.x, e.y)
         self.draw()
 
     def new_tab(self, url):
-        """Create, load, and activate a tab for ``url``."""
-        new_tab = Tab()
+        """Create, load, and activate a tab for ``url``.
+
+        The tab's layout viewport excludes the height occupied by the tab bar.
+        """
+        new_tab = Tab(HEIGHT - self.chrome.bottom)
         new_tab.load(url)
         self.active_tab = new_tab
         self.tabs.append(new_tab)
@@ -67,10 +83,11 @@ class Browser:
         self.scroll_page(-SCROLL_STEP if event.delta > 0 else SCROLL_STEP)
 
     def max_scroll(self):
-        """Return the greatest valid scroll offset for the active tab."""
+        """Return the greatest scroll offset below the tab bar."""
         if self.active_tab is None or self.active_tab.layout is None:
             return 0
-        return max(0, self.active_tab.layout.height - self.canvas.winfo_height())
+        viewport_height = max(0, self.canvas.winfo_height() - self.chrome.bottom)
+        return max(0, self.active_tab.layout.height - viewport_height)
 
     def update_scroll_bar(self):
         """Update the scrollbar thumb to match the current viewport."""
@@ -100,9 +117,120 @@ class Browser:
         self.draw()
 
     def draw(self):
-        """Draw the active tab at the browser's current scroll offset."""
+        """Draw page content below the tab bar and then draw the tab bar."""
         self.canvas.delete("all")
-        if self.active_tab is None:
-            return
-        self.active_tab.draw(self.canvas, self.scroll)
+        if self.active_tab is not None:
+            self.active_tab.draw(
+                self.canvas, self.scroll - self.chrome.bottom
+            )
         self.update_scroll_bar()
+        for cmd in self.chrome.paint():
+            cmd.execute(0, self.canvas)
+
+class Chrome:
+    """Render and manage the browser's tab bar and new-tab control."""
+
+    def __init__(self, browser):
+        """Create browser chrome associated with ``browser``."""
+        self.browser = browser
+        self.font = Font("Times", 20, "normal", "roman")
+        self.font_height = self.font.metrics("linespace")
+        self.padding = 5
+        self.tabbar_top = 0
+        self.tabbar_bottom = self.font_height + 2*self.padding
+        plus_width = self.font.measure("+") + 2*self.padding
+        self.newtab_rect = Rect(
+            self.padding, self.padding,
+            self.padding + plus_width,
+            self.padding + self.font_height
+        )
+        self.bottom = self.tabbar_bottom
+        self.urlbar_top = self.tabbar_bottom
+        self.urllbar_bottom = self.urlbar_top + self.font_height + 2 * self.padding
+        self.bottom = self.urllbar_bottom
+        back_width = self.font.measure("<") + 2 * self.padding
+        self.back_rect = Rect(
+            self.padding,
+            self.urlbar_top + self.padding,
+            self.padding + back_width,
+            self.urllbar_bottom - self.padding
+        )
+        self.address_rect = Rect(
+            self.back_rect.right + self.padding,
+            self.urlbar_top + self.padding,
+            WIDTH - self.padding,
+            self.urllbar_bottom - self.padding
+        )
+
+    def tab_rect(self, i):
+        """Return the tab-bar rectangle for the tab at index ``i``."""
+        tabs_start = self.newtab_rect.right + self.padding
+        tab_width = self.font.measure("Tab X") + 2*self.padding
+        return Rect(
+            tabs_start + tab_width * i, self.tabbar_top,
+            tabs_start + tab_width * (i + 1), self.tabbar_bottom
+        )
+
+    def click(self, x, y):
+        """Handle clicks on the new-tab, back, or tab controls."""
+        if self.newtab_rect.contains_point(x,y):
+            self.browser.new_tab("https://browser.engineering")
+        elif self.back_rect.contains_point(x, y):
+            self.browser.active_tab.go_back()
+        else:
+            for i, tab in enumerate(self.browser.tabs):
+                if self.tab_rect(i).contains_point(x,y):
+                    self.browser.active_tab = tab
+                    break
+
+    def paint(self):
+        """Return drawing commands for the tab bar and its controls."""
+        cmds = []
+        cmds.append(DrawRect(Rect(0, 0, WIDTH, self.bottom), "white"))
+        cmds.append(DrawOutline(self.newtab_rect, "black", 1))
+        cmds.append(DrawText(
+            self.newtab_rect.left + self.padding,
+            self.newtab_rect.top,
+            "+", self.font, "black"
+        ))
+        cmds.append(DrawOutline(self.back_rect, "black", 1))
+        cmds.append(DrawText(
+            self.back_rect.left + self.padding,
+            self.back_rect.top,
+            "<", self.font, "black"
+        ))
+        cmds.append(DrawLine(
+            0, self.bottom, WIDTH, self.bottom, "black", 1
+        ))
+        for i, tab in enumerate(self.browser.tabs):
+            bounds = self.tab_rect(i)
+            cmds.append(DrawLine(
+                bounds.left, 0, bounds.left, bounds.bottom,
+                "black", 1
+            ))
+            cmds.append(DrawLine(
+                bounds.right, 0, bounds.right, bounds.bottom,
+                "black", 1
+            ))
+            cmds.append(DrawText(
+                bounds.left + self.padding, bounds.top + self.padding,
+                "Tab {}".format(i), self.font, "black"
+            ))
+            if tab == self.browser.active_tab:
+                cmds.append(DrawLine(
+                    0, bounds.bottom, bounds.left, bounds.bottom,
+                    "black", 1
+                ))
+                cmds.append(DrawLine(
+                    bounds.right, bounds.bottom, WIDTH, bounds.bottom,
+                    "black", 1
+                ))
+        cmds.append(DrawOutline(self.address_rect, "black", 1))
+        url = str(self.browser.active_tab.page)
+        cmds.append(DrawText(
+            self.address_rect.left + self.padding,
+            self.address_rect.top,
+            url, self.font, "black"
+        ))
+
+        return cmds

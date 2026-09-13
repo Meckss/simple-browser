@@ -17,12 +17,14 @@ DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).par
 
 class Tab:
     """Own the document displayed in one browser tab."""
-    def __init__(self):
-        """Create an empty tab."""
+    def __init__(self, tab_height):
+        """Create an empty tab with a content viewport ``tab_height`` high."""
         self.page = None
         self.text = ""
         self.layout = None
         self._layout_width = None
+        self.tab_height = tab_height
+        self.history = []
 
     def render_text(self, text, page=None):
         """Parse and lay out HTML text."""
@@ -80,6 +82,7 @@ class Tab:
         self.make_layout(self.text, width, self.page)
         self.display_list = []
         paint_tree(self.layout, self.display_list)
+
     def click(self, x, y, scroll=0):
         """Follow a link hit at viewport coordinates ``x``, ``y``.
 
@@ -110,7 +113,14 @@ class Tab:
             if cmd.top > scroll + canvas_height: continue
             if cmd.bottom < scroll: continue
             cmd.execute(scroll, canvas)
-        
+
+    def go_back(self):
+        """Return to the previous page in this tab's navigation history."""
+        if len(self.history) > 1:
+            self.history.pop()
+            back = self.history.pop()
+            self.load(back)
+
     def show_error(self, title, error):
         """Render a user-facing error page with the supplied message."""
         error_text = (
@@ -130,6 +140,7 @@ class Tab:
     def load(self, url):
         """Fetch and render ``url``, showing supported load errors in the UI."""
         try:
+            self.history.append(url)
             page, body = load_page(Page(url))
             self.render_text(body, page=page)
             

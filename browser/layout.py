@@ -1,5 +1,6 @@
 """Common base class for objects in the document layout tree."""
 
+from .draw import Rect
 
 class Layout:
     """Store the structure and geometry shared by every layout object."""
@@ -28,3 +29,8 @@ class Layout:
     def paint(self):
         """Return drawing commands emitted by this layout object."""
         return []
+
+    def self_rect(self):
+        """Return this layout object's bounds as a :class:`Rect`."""
+        return Rect(self.x, self.y,
+                    self.x + self.width, self.y + self.height)
