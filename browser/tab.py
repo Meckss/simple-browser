@@ -14,6 +14,7 @@ from .selector import cascade_priority
 from .ui_constants import WIDTH
 STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
+STYLESHEET_CACHE = {}
 
 class Tab:
     """Own the document displayed in one browser tab."""
@@ -61,11 +62,16 @@ class Tab:
                 and page is not None
             ):
                 style_url = page.resolve(node.attributes["href"])
+                cache_key = str(style_url)
                 try:
-                    stylesheet = style_url.request()
+                    stylesheet_rules = STYLESHEET_CACHE.get(cache_key)
+                    if stylesheet_rules is None:
+                        stylesheet = style_url.request()
+                        stylesheet_rules = CSSParser(stylesheet).parse()
+                        STYLESHEET_CACHE[cache_key] = stylesheet_rules
                 except OSError:
                     continue
-                rules.extend(CSSParser(stylesheet).parse())
+                rules.extend(stylesheet_rules)
 
         style(root, sorted(rules, key = cascade_priority))
         self.layout = DocumentLayout(root, width)
