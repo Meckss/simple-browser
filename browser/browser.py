@@ -67,7 +67,10 @@ class Browser:
 
     def resize(self, event):
         """Relayout the active tab when the viewport width changes."""
-        if self.active_tab is None or event.width <= 0:
+        if event.width <= 0:
+            return
+        self.chrome.resize(event.width)
+        if self.active_tab is None:
             return
         self.active_tab.resize(event.width)
         self.scroll = max(0, min(self.scroll, self.max_scroll()))
@@ -133,6 +136,7 @@ class Chrome:
     def __init__(self, browser):
         """Create browser chrome associated with ``browser``."""
         self.browser = browser
+        self.width = WIDTH
         self.font = Font("Times", 20, "normal", "roman")
         self.font_height = self.font.metrics("linespace")
         self.padding = 5
@@ -158,9 +162,16 @@ class Chrome:
         self.address_rect = Rect(
             self.back_rect.right + self.padding,
             self.urlbar_top + self.padding,
-            WIDTH - self.padding,
+            self.width - self.padding,
             self.urllbar_bottom - self.padding
         )
+
+    def resize(self, width):
+        """Update chrome geometry after the canvas is resized."""
+        if width <= 0 or width == self.width:
+            return
+        self.width = width
+        self.address_rect.right = width - self.padding
 
     def tab_rect(self, i):
         """Return the tab-bar rectangle for the tab at index ``i``."""
@@ -186,7 +197,7 @@ class Chrome:
     def paint(self):
         """Return drawing commands for the tab bar and its controls."""
         cmds = []
-        cmds.append(DrawRect(Rect(0, 0, WIDTH, self.bottom), "white"))
+        cmds.append(DrawRect(Rect(0, 0, self.width, self.bottom), "white"))
         cmds.append(DrawOutline(self.newtab_rect, "black", 1))
         cmds.append(DrawText(
             self.newtab_rect.left + self.padding,
@@ -200,7 +211,7 @@ class Chrome:
             "<", self.font, "black"
         ))
         cmds.append(DrawLine(
-            0, self.bottom, WIDTH, self.bottom, "black", 1
+            0, self.bottom, self.width, self.bottom, "black", 1
         ))
         for i, tab in enumerate(self.browser.tabs):
             bounds = self.tab_rect(i)
@@ -222,7 +233,7 @@ class Chrome:
                     "black", 1
                 ))
                 cmds.append(DrawLine(
-                    bounds.right, bounds.bottom, WIDTH, bounds.bottom,
+                    bounds.right, bounds.bottom, self.width, bounds.bottom,
                     "black", 1
                 ))
         cmds.append(DrawOutline(self.address_rect, "black", 1))
