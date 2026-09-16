@@ -3,7 +3,7 @@
 from pathlib import Path
 import urllib.parse
 
-from ..networking.page import Page
+from ..networking.webresource import WebResource
 from ..html.element import Element
 from ..html.text import Text
 from ..layout.document import DocumentLayout
@@ -183,7 +183,7 @@ class Tab:
     def _load(self, url, record_history):
         """Fetch and render a URL, optionally recording a new navigation."""
         try:
-            requested_page = Page(url)
+            requested_page = WebResource(url)
 
             if record_history:
                 self.history.append(url)
@@ -207,7 +207,7 @@ def load_page(page, max_redirects = 10):
     """Request a page and follow redirects up to ``max_redirects`` times.
 
     Returns:
-        tuple[Page, str]: The final page object and its response body.
+        tuple[WebResource, str]: The final resource and its response body.
 
     Raises:
         RuntimeError: If the redirect limit is exceeded.
@@ -230,7 +230,7 @@ def load_page(page, max_redirects = 10):
         if page.view_source and not next_page.startswith("view-source:"):
             next_page = "view-source:" + next_page
         
-        page = Page(next_page)
+        page = WebResource(next_page)
     return page, body
 
 def paint_tree(layout_object, display_list):

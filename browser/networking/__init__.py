@@ -1,5 +1,6 @@
 """Networking and URL/resource loading."""
 
-from .page import Page
+from .webresource import WebResource
+from .url import URL
 
-__all__ = ["Page"]
+__all__ = ["URL", "WebResource"]
