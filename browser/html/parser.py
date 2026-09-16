@@ -4,7 +4,7 @@ import re
 
 from .text import Text
 from .element import Element
-from .html_constants import (
+from .constants import (
     HEAD_TAGS,
     HTML_ENTITIES,
     IMPLICITLY_CLOSED_BY_SAME_TAG,

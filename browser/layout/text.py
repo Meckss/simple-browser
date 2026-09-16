@@ -1,7 +1,7 @@
 """Word-level layout and painting for inline text."""
 
-from .draw import DrawText
-from .layout import Layout
+from ..rendering.draw import DrawText
+from .base import Layout
 
 
 class TextLayout(Layout):

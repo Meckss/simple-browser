@@ -8,9 +8,9 @@ document loading, layout, and per-tab navigation history.
 import tkinter
 
 from .tab import Tab
-from .ui_constants import HEIGHT, SCROLL_STEP, WIDTH
-from .font import Font
-from .draw import DrawLine, DrawOutline, Rect, DrawText, DrawRect
+from .constants import HEIGHT, SCROLL_STEP, WIDTH
+from ..rendering.font import Font
+from ..rendering.draw import DrawLine, DrawOutline, Rect, DrawText, DrawRect
 
 class Browser:
     """Manage browser tabs, the shared viewport, and user input.

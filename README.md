@@ -102,11 +102,12 @@ Usage: python main.py URL
 ## Project structure
 
 - `main.py` — command-line entry point
-- `browser/page.py` — URL parsing, socket connections, TLS, and response decoding
-- `browser/html_parser.py` — HTML parsing
-- `browser/css_parser.py` and `browser/style.py` — CSS parsing and styling
-- `browser/layout.py` and related modules — document layout and painting
-- `browser/browser.py` and `browser/tab.py` — Tkinter UI, tabs, and navigation
+- `browser/networking/` — URL parsing, socket connections, TLS, and response decoding
+- `browser/html/` — HTML parsing and document tree types
+- `browser/css/` — CSS parsing, selectors, and styling
+- `browser/layout/` — document, block, line, and text layout
+- `browser/rendering/` — drawing commands and font helpers
+- `browser/ui/` — Tkinter UI, tabs, and navigation
 
 ## Status
 

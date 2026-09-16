@@ -3,17 +3,17 @@
 from pathlib import Path
 import urllib.parse
 
-from .page import Page
-from .element import Element
-from .text import Text
-from .document_layout import DocumentLayout
-from .html_parser import HTMLParser
-from .style import style
-from .css_parser import CSSParser
-from .tree_utils import tree_to_list
-from .selector import cascade_priority
-from .ui_constants import WIDTH
-STYLE_SHEET_PATH = Path(__file__).with_name("browser.css")
+from ..networking.page import Page
+from ..html.element import Element
+from ..html.text import Text
+from ..layout.document import DocumentLayout
+from ..html.parser import HTMLParser
+from ..css.style import style
+from ..css.parser import CSSParser
+from ..html.tree_utils import tree_to_list
+from ..css.selector import cascade_priority
+from .constants import WIDTH
+STYLE_SHEET_PATH = Path(__file__).parents[1] / "browser.css"
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 STYLESHEET_CACHE = {}
 

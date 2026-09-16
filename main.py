@@ -2,7 +2,7 @@
 
 import sys
 
-from browser.browser import Browser
+from browser.ui.browser import Browser
 
 
 def main():

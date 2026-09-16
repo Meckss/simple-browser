@@ -1,6 +1,6 @@
 """Inline line-box layout for a block's text content."""
 
-from .layout import Layout
+from .base import Layout
 
 
 class LineLayout(Layout):

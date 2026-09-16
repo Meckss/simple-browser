@@ -2,9 +2,9 @@
 
 import re
 
-from .css_parser import CSSParser
-from .element import Element
-from .css_utils import css_size_to_px
+from .parser import CSSParser
+from ..html.element import Element
+from .utils import css_size_to_px
 
 INHERITED_PROPERTIES = {
     "font-family" : "Times",

@@ -2,15 +2,15 @@
 
 import re
 
-from .text import Text
-from .element import Element
-from .draw import DrawRect
-from .layout_constants import HSTEP, PARAGRAPH_STEP, VSTEP
-from .css_utils import css_size_to_px
-from .font_utils import get_font
-from .layout import Layout
-from .line_layout import LineLayout
-from .text_layout import TextLayout
+from ..html.text import Text
+from ..html.element import Element
+from ..rendering.draw import DrawRect
+from .constants import HSTEP, PARAGRAPH_STEP, VSTEP
+from ..css.utils import css_size_to_px
+from ..rendering.font_utils import get_font
+from .base import Layout
+from .line import LineLayout
+from .text import TextLayout
 
 def _is_auto(value):
     """Return whether a CSS value is the ``auto`` keyword."""

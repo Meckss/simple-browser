@@ -1,8 +1,8 @@
 """Top-level layout wrapper for an HTML document."""
 
-from .block_layout import BlockLayout
-from .layout_constants import HSTEP, VSTEP
-from .layout import Layout
+from .block import BlockLayout
+from .constants import HSTEP, VSTEP
+from .base import Layout
 
 
 class DocumentLayout(Layout):

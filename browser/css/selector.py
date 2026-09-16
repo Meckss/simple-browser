@@ -1,6 +1,6 @@
 """Selectors used to match elements in the browser's document tree."""
 
-from .element import Element
+from ..html.element import Element
 
 
 class HasSelector:

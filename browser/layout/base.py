@@ -1,6 +1,6 @@
 """Common base class for objects in the document layout tree."""
 
-from .draw import Rect
+from ..rendering.draw import Rect
 
 class Layout:
     """Store the structure and geometry shared by every layout object."""

@@ -1,6 +1,6 @@
 """Shared font construction and caching for layout objects."""
 
-from .css_utils import css_size_to_px
+from ..css.utils import css_size_to_px
 from .font import Font
 
 
