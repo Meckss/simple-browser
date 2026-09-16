@@ -133,7 +133,7 @@ class Tab:
             f"{title}\n\n"
             f"{error}\n\n"
             "Usage:\n"
-            "  python browser.py <url>\n\n"
+            "  python main.py <url>\n\n"
             "Supported URLs:\n"
             "  http://example.com\n"
             "  https://example.com\n"
