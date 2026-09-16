@@ -36,7 +36,7 @@ class Browser:
         self.window.bind("<BackSpace>", self.handle_backspace)
 
     def handle_down(self, e):
-        """Scroll the active document down by one keyboard unit."""
+        """Handle a Down key event by scrolling one keyboard unit."""
         self.scroll_page(SCROLL_STEP)
 
     def handle_click(self, e):
@@ -57,6 +57,7 @@ class Browser:
         self.draw()
         
     def handle_key(self, e):
+        """Add a printable key event's character to the address bar."""
         if len(e.char) == 0:
             return
         if not (0x20 <= ord(e.char) < 0x7f):
@@ -65,10 +66,12 @@ class Browser:
         self.draw()
         
     def handle_enter(self, e):
+        """Handle Enter by navigating to the address-bar contents."""
         self.chrome.enter()
         self.draw()
     
     def handle_backspace(self, e):
+        """Handle Backspace by removing the last address-bar character."""
         self.chrome.backspace()
         self.draw()
 
@@ -85,7 +88,7 @@ class Browser:
         self.draw()
 
     def resize(self, event):
-        """Relayout the active tab when the viewport width changes."""
+        """Relayout the chrome and active tab after a canvas resize."""
         if event.width <= 0:
             return
         self.chrome.resize(event.width)
@@ -96,23 +99,27 @@ class Browser:
         self.draw()
 
     def scroll_page(self, amount):
-        """Move the viewport by ``amount`` pixels, within valid bounds."""
+        """Move the viewport by ``amount`` pixels and redraw the window.
+
+        The resulting offset is clamped between the top and bottom of the
+        active document.
+        """
         self.scroll = max(0, min(self.scroll + amount, self.max_scroll()))
         self.draw()
 
     def mouse_scroll(self, event):
-        """Translate a mouse-wheel event into a vertical scroll."""
+        """Translate a mouse-wheel event into a vertical scroll step."""
         self.scroll_page(-SCROLL_STEP if event.delta > 0 else SCROLL_STEP)
 
     def max_scroll(self):
-        """Return the greatest scroll offset below the tab bar."""
+        """Return the greatest valid document scroll offset in pixels."""
         if self.active_tab is None or self.active_tab.layout is None:
             return 0
         viewport_height = max(0, self.canvas.winfo_height() - self.chrome.bottom)
         return max(0, self.active_tab.layout.height - viewport_height)
 
     def update_scroll_bar(self):
-        """Update the scrollbar thumb to match the current viewport."""
+        """Update the scrollbar thumb to match the current document offset."""
         canvas_height = self.canvas.winfo_height()
         maximum = self.max_scroll()
         if maximum == 0:
@@ -124,7 +131,11 @@ class Browser:
         )
 
     def scroll_bar_scroll(self, *args):
-        """Apply a Tkinter scrollbar command and redraw the document."""
+        """Apply a Tkinter scrollbar command and redraw the document.
+
+        Tkinter supplies commands such as ``("moveto", fraction)`` and
+        ``("scroll", amount, "units"|"pages")``.
+        """
         canvas_height = self.canvas.winfo_height()
         maximum = self.max_scroll()
         if args[0] == "moveto":
@@ -139,7 +150,7 @@ class Browser:
         self.draw()
 
     def draw(self):
-        """Draw page content below the tab bar and then draw the tab bar."""
+        """Redraw page content, the scrollbar, and the browser chrome."""
         self.canvas.delete("all")
         if self.active_tab is not None:
             self.active_tab.draw(
@@ -188,14 +199,21 @@ class Chrome:
         self.address_bar = ""
 
     def resize(self, width):
-        """Update chrome geometry after the canvas is resized."""
+        """Update chrome geometry after the canvas width changes."""
         if width <= 0 or width == self.width:
             return
         self.width = width
         self.address_rect.right = width - self.padding
 
     def tab_rect(self, i):
-        """Return the tab-bar rectangle for the tab at index ``i``."""
+        """Return the tab-bar rectangle for the tab at index ``i``.
+
+        Args:
+            i (int): Zero-based index of the tab.
+
+        Returns:
+            Rect: The tab's bounds in canvas coordinates.
+        """
         tabs_start = self.newtab_rect.right + self.padding
         tab_width = self.font.measure("Tab X") + 2*self.padding
         return Rect(
@@ -204,7 +222,12 @@ class Chrome:
         )
 
     def click(self, x, y):
-        """Handle clicks on the new-tab, back, or tab controls."""
+        """Handle a click on a tab-bar or address-bar control.
+
+        Args:
+            x (int): Horizontal canvas coordinate of the click.
+            y (int): Vertical canvas coordinate of the click.
+        """
         if self.newtab_rect.contains_point(x,y):
             self.browser.new_tab("https://browser.engineering")
         elif self.back_rect.contains_point(x, y):
@@ -219,22 +242,30 @@ class Chrome:
                     break
     
     def keypress(self, char):
+        """Append ``char`` to the address bar when it has focus."""
         if self.focus == "address bar":
             self.address_bar += char
         
     def enter(self):
+        """Load the address-bar contents when the address bar has focus."""
         if self.focus == "address bar":
             self.browser.active_tab.load(self.address_bar)
             self.focus = None
     
     def backspace(self):
+        """Remove the final address-bar character when it has focus."""
         if self.focus == "address bar":
             if len(self.address_bar) == 0:
                 return
             self.address_bar = self.address_bar[:-1]
 
     def paint(self):
-        """Return drawing commands for the tab bar and its controls."""
+        """Return drawing commands for the tabs and browser controls.
+
+        Returns:
+            list: Drawing commands that can be executed on the browser
+                canvas.
+        """
         cmds = []
         cmds.append(DrawRect(Rect(0, 0, self.width, self.bottom), "white"))
         cmds.append(DrawOutline(self.newtab_rect, "black", 1))
