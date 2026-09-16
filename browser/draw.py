@@ -1,5 +1,32 @@
 """Drawing command objects consumed by the Tkinter canvas."""
 
+
+def _tk_color(color):
+    """Convert CSS colors with alpha to colors accepted by Tkinter.
+
+    Tkinter does not support CSS's four- or eight-digit hexadecimal colors.
+    Fully transparent colors should not be painted; partially transparent
+    colors are approximated by their RGB component.
+    """
+    if not isinstance(color, str):
+        return color
+
+    value = color.strip()
+    if value.casefold() == "transparent":
+        return None
+
+    if value.startswith("#") and len(value) in (5, 9):
+        digits = value[1:]
+        if len(digits) == 4:
+            alpha = int(digits[3] * 2, 16)
+            rgb = "".join(digit * 2 for digit in digits[:3])
+        else:
+            alpha = int(digits[6:8], 16)
+            rgb = digits[:6]
+        return None if alpha == 0 else f"#{rgb}"
+
+    return value
+
 class DrawText:
     """Represent one piece of text to draw at a document coordinate."""
     def __init__(self, x1, y1, text, font, color):
@@ -13,12 +40,15 @@ class DrawText:
     
     def execute(self, scroll, canvas):
         """Draw the text on ``canvas`` adjusted by the vertical scroll offset."""
+        color = _tk_color(self.color)
+        if color is None:
+            return
         canvas.create_text(
             self.left, self.top - scroll,
             text = self.text,
             font = self.font.tk_font,
             anchor = "nw",
-            fill = self.color
+            fill = color
         )
     
 class DrawRect:
@@ -28,13 +58,26 @@ class DrawRect:
         self.rect = rect
         self.color = color
 
+    @property
+    def top(self):
+        """Return the top document coordinate of the rectangle."""
+        return self.rect.top
+
+    @property
+    def bottom(self):
+        """Return the bottom document coordinate of the rectangle."""
+        return self.rect.bottom
+
     def execute(self, scroll, canvas):
         """Draw the rectangle adjusted by the vertical scroll offset."""
+        color = _tk_color(self.color)
+        if color is None:
+            return
         canvas.create_rectangle(
             self.rect.left, self.rect.top - scroll,
             self.rect.right, self.rect.bottom - scroll,
             width = 0,
-            fill = self.color
+            fill = color
         )
 
 class DrawOutline:
@@ -46,13 +89,26 @@ class DrawOutline:
         self.color = color
         self.thickness = thickness
 
+    @property
+    def top(self):
+        """Return the top document coordinate of the outline."""
+        return self.rect.top
+
+    @property
+    def bottom(self):
+        """Return the bottom document coordinate of the outline."""
+        return self.rect.bottom
+
     def execute(self, scroll, canvas):
         """Draw the outline adjusted by the vertical scroll offset."""
+        color = _tk_color(self.color)
+        if color is None:
+            return
         canvas.create_rectangle(
             self.rect.left, self.rect.top - scroll,
             self.rect.right, self.rect.bottom - scroll,
             width = self.thickness,
-            outline = self.color
+            outline = color
         )
 
 class DrawLine:
@@ -64,12 +120,25 @@ class DrawLine:
         self.color = color
         self.thickness = thickness
 
+    @property
+    def top(self):
+        """Return the top document coordinate of the line bounds."""
+        return self.rect.top
+
+    @property
+    def bottom(self):
+        """Return the bottom document coordinate of the line bounds."""
+        return self.rect.bottom
+
     def execute(self, scroll, canvas):
         """Draw the line adjusted by the vertical scroll offset."""
+        color = _tk_color(self.color)
+        if color is None:
+            return
         canvas.create_line(
             self.rect.left, self.rect.top - scroll,
             self.rect.right, self.rect.bottom - scroll,
-            fill = self.color, width = self.thickness
+            fill = color, width = self.thickness
         )
 
 
