@@ -13,7 +13,6 @@ from .html_constants import (
     SELF_CLOSING_TAGS,
 )
 
-
 def unescape(text):
     """Replace HTML character references."""
     reference = re.compile(r"&(#(?:x[0-9a-f]+|[0-9]+)|[a-z][a-z0-9]+)(;?)",

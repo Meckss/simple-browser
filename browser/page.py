@@ -12,9 +12,22 @@ import zlib
 class Page:
     """Represent a supported URL and retrieve its text response."""
     connections = {}
+
+    @staticmethod
+    def _normalize_url(url):
+        """Remove stray HTML quote characters from a URL."""
+        url = url.strip()
+        if len(url) >= 2 and url[-1] == "/" and url[-2] in "'\"":
+            url = url[:-2]
+        while url and url[0] in "'\"":
+            url = url[1:].lstrip()
+        while url and url[-1] in "'\"":
+            url = url[:-1].rstrip()
+        return url
     
     def __init__(self, url):
         """Parse an HTTP(S), file, data, or view-source URL."""
+        url = self._normalize_url(url)
         self.original_url = url
         self.redirect_url = None
         self.view_source = False
@@ -30,7 +43,10 @@ class Page:
             self.scheme, url = url.split(":", 1)
         
         if self.scheme not in ["http", "https", "file", "data"]:
-            raise ValueError(f"Unsupported URL scheme: {self.scheme!r}")
+            raise ValueError(
+                f"Unsupported URL scheme: {self.scheme!r} in URL "
+                f"{self.original_url!r}"
+            )
             
         if self.scheme == "file":
             self.path = os.path.abspath(url)
@@ -143,6 +159,7 @@ class Page:
         
     def resolve(self, url):
         """Resolve a relative or scheme-relative URL against this page."""
+        url = self._normalize_url(url)
         if "://" in url: 
             return Page(url)
         if not url.startswith("/"):
