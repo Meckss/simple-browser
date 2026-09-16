@@ -145,12 +145,20 @@ class Tab:
             self.forward_history.append(self.history.pop())
             self._load(self.history[-1], record_history=False)
 
+    def can_go_back(self):
+        """Return whether this tab has a page available in its back history."""
+        return len(self.history) > 1
+
     def go_forward(self):
         """Return to the next page after navigating back in this tab."""
         if self.forward_history:
             url = self.forward_history.pop()
             self.history.append(url)
             self._load(url, record_history=False)
+
+    def can_go_forward(self):
+        """Return whether this tab has a page available in its forward history."""
+        return bool(self.forward_history)
 
     def show_error(self, title, error):
         """Render a user-facing error page with the supplied message."""

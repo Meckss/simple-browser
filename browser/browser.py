@@ -253,9 +253,11 @@ class Chrome:
         """
         if self.newtab_rect.contains_point(x,y):
             self.browser.new_tab("https://browser.engineering")
-        elif self.back_rect.contains_point(x, y):
+        elif (self.back_rect.contains_point(x, y)
+              and self.browser.active_tab.can_go_back()):
             self.browser.active_tab.go_back()
-        elif self.forward_rect.contains_point(x, y):
+        elif (self.forward_rect.contains_point(x, y)
+              and self.browser.active_tab.can_go_forward()):
             self.browser.active_tab.go_forward()
         elif self.address_rect.contains_point(x, y):
             self.focus = "address bar"
@@ -323,17 +325,25 @@ class Chrome:
             self.newtab_rect.top,
             "+", self.font, "black"
         ))
-        cmds.append(DrawOutline(self.back_rect, "black", 1))
+        back_color = (
+            "black" if self.browser.active_tab is not None
+            and self.browser.active_tab.can_go_back() else "gray"
+        )
+        forward_color = (
+            "black" if self.browser.active_tab is not None
+            and self.browser.active_tab.can_go_forward() else "gray"
+        )
+        cmds.append(DrawOutline(self.back_rect, back_color, 1))
         cmds.append(DrawText(
             self.back_rect.left + self.padding,
             self.back_rect.top,
-            "<", self.font, "black"
+            "<", self.font, back_color
         ))
-        cmds.append(DrawOutline(self.forward_rect, "black", 1))
+        cmds.append(DrawOutline(self.forward_rect, forward_color, 1))
         cmds.append(DrawText(
             self.forward_rect.left + self.padding,
             self.forward_rect.top,
-            ">", self.font, "black"
+            ">", self.font, forward_color
         ))
         cmds.append(DrawLine(
             0, self.bottom, self.width, self.bottom, "black", 1
