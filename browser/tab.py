@@ -27,6 +27,7 @@ class Tab:
         self._layout_width = None
         self.tab_height = tab_height
         self.history = []
+        self.forward_history = []
         self.fragment_scroll = None
 
     def render_text(self, text, page=None):
@@ -141,9 +142,15 @@ class Tab:
     def go_back(self):
         """Return to the previous page in this tab's navigation history."""
         if len(self.history) > 1:
-            self.history.pop()
-            back = self.history.pop()
-            self.load(back)
+            self.forward_history.append(self.history.pop())
+            self._load(self.history[-1], record_history=False)
+
+    def go_forward(self):
+        """Return to the next page after navigating back in this tab."""
+        if self.forward_history:
+            url = self.forward_history.pop()
+            self.history.append(url)
+            self._load(url, record_history=False)
 
     def show_error(self, title, error):
         """Render a user-facing error page with the supplied message."""
@@ -163,18 +170,24 @@ class Tab:
     
     def load(self, url):
         """Fetch and render ``url``, showing supported load errors in the UI."""
+        self._load(url, record_history=True)
+
+    def _load(self, url, record_history):
+        """Fetch and render a URL, optionally recording a new navigation."""
         try:
             requested_page = Page(url)
+
+            if record_history:
+                self.history.append(url)
+                self.forward_history.clear()
 
             if (self.page is not None and requested_page.fragment is not None
                     and requested_page.original_url.split("#", 1)[0] ==
                     self.page.original_url.split("#", 1)[0]):
-                self.history.append(url)
                 self.page = requested_page
                 self.fragment_scroll = self._fragment_scroll(requested_page)
                 return
 
-            self.history.append(url)
             page, body = load_page(requested_page)
             self.render_text(body, page=page)
             

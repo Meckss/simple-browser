@@ -16,10 +16,14 @@ extended as a hands-on systems programming project.
 - Supports `file://`, `data:`, and `view-source:` URLs
 - Parses a subset of HTML and CSS, including inline and external stylesheets
 - Lays out and renders styled text in a Tkinter window
-- Supports clickable links, back navigation, scrolling, and window resizing
-- Includes browser chrome with a tab strip, new-tab control, back button, and
-  current-page display
+- Supports clickable links, back/forward navigation, scrolling, and window
+  resizing
+- Includes browser chrome with a tab strip, new-tab control, back and forward
+  buttons, and current-page display
 - Supports multiple tabs and switching between them
+- Supports fragment links, including scrolling to matching `id` and `name`
+  targets
+- Reflows the document when the browser window is resized
 
 ## Roadmap
 
@@ -28,7 +32,7 @@ from Chapter 7 of the book. The remaining roadmap follows Chapters 8–16.
 
 - [x] Implement hyperlinks and clickable `<a>` elements
 - [x] Build browser chrome with tab and navigation controls
-- [x] Add tabbed browsing and per-tab back history
+- [x] Add tabbed browsing and per-tab back/forward history
 - [ ] Chapter 8 — **Sending Information to Servers**: forms, editable input
   widgets, form submission, HTTP `POST` requests, and web applications
 - [ ] Chapter 9 — **Running Interactive Scripts**: JavaScript execution, DOM
@@ -87,8 +91,12 @@ Usage: python main.py URL
 
 - Click `+` to open a new tab.
 - Click `<` to go back in the active tab.
+- Click `>` to go forward after going back in the active tab.
 - Click a tab to make it active.
 - Click links in a page to navigate.
+- Click the address bar to enter a URL. Hosts ending in `.com`, `.org`, or
+  `.engineering` are opened over HTTPS; other text is searched with Google.
+- Press `Enter` to submit the address bar, or `BackSpace` to edit it.
 - Use the mouse wheel, `Up`/`Down` keys, or the scrollbar to scroll.
 
 ## Project structure

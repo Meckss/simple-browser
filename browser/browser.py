@@ -1,4 +1,9 @@
-"""Tkinter user interface and tab management for the browser."""
+"""Tkinter user interface, browser chrome, and tab management.
+
+The module owns the application window, shared viewport scrolling, tab
+selection, navigation controls, and address-bar input. Individual tabs own
+document loading, layout, and per-tab navigation history.
+"""
 
 import tkinter
 
@@ -8,7 +13,11 @@ from .font import Font
 from .draw import DrawLine, DrawOutline, Rect, DrawText, DrawRect
 
 class Browser:
-    """Manage browser tabs, the shared viewport, and user input."""
+    """Manage browser tabs, the shared viewport, and user input.
+
+    The canvas displays the active tab below the browser chrome. Scrolling is
+    shared by the window, while navigation history remains local to each tab.
+    """
 
     def __init__(self):
         """Create the browser window and install its event handlers."""
@@ -164,7 +173,11 @@ class Browser:
             cmd.execute(0, self.canvas)
 
 class Chrome:
-    """Render and manage the browser's tab bar and new-tab control."""
+    """Render and manage tabs, navigation controls, and the address bar.
+
+    The chrome contains controls for opening tabs, moving through the active
+    tab's history, switching tabs, and entering URLs or search terms.
+    """
 
     def __init__(self, browser):
         """Create browser chrome associated with ``browser``."""
@@ -192,8 +205,15 @@ class Chrome:
             self.padding + back_width,
             self.urllbar_bottom - self.padding
         )
-        self.address_rect = Rect(
+        forward_width = self.font.measure(">") + 2 * self.padding
+        self.forward_rect = Rect(
             self.back_rect.right + self.padding,
+            self.urlbar_top + self.padding,
+            self.back_rect.right + self.padding + forward_width,
+            self.urllbar_bottom - self.padding
+        )
+        self.address_rect = Rect(
+            self.forward_rect.right + self.padding,
             self.urlbar_top + self.padding,
             self.width - self.padding,
             self.urllbar_bottom - self.padding
@@ -235,6 +255,8 @@ class Chrome:
             self.browser.new_tab("https://browser.engineering")
         elif self.back_rect.contains_point(x, y):
             self.browser.active_tab.go_back()
+        elif self.forward_rect.contains_point(x, y):
+            self.browser.active_tab.go_forward()
         elif self.address_rect.contains_point(x, y):
             self.focus = "address bar"
             self.address_bar = ""
@@ -250,9 +272,33 @@ class Chrome:
             self.address_bar += char
         
     def enter(self):
-        """Load the address-bar contents when the address bar has focus."""
+        """Submit the focused address bar as a URL or Google search.
+
+        Fully qualified URLs and supported special schemes are loaded as-is.
+        Bare hosts ending in ``.com``, ``.org``, or ``.engineering`` receive
+        an ``https://`` prefix; other bare text becomes a Google search.
+        """
         if self.focus == "address bar":
-            self.browser.active_tab.load(self.address_bar)
+            url = self.address_bar.strip()
+            if url and "://" not in url and not url.startswith(
+                ("data:", "file:", "view-source:")
+            ):
+                hostname = url.split("/", 1)[0].lower()
+                if hostname.endswith((".com", ".org", ".engineering")):
+                    url = "https://" + url
+                else:
+                    query = ""
+                    for byte in url.encode("utf-8"):
+                        char = chr(byte)
+                        if (char.isalnum() or char in "-_.~") and byte < 128:
+                            query += char
+                        elif byte == 0x20:
+                            query += "+"
+                        else:
+                            query += "%{:02X}".format(byte)
+                    url = "https://www.google.com/search?q=" + query
+            if url:
+                self.browser.active_tab.load(url)
             self.focus = None
     
     def backspace(self):
@@ -282,6 +328,12 @@ class Chrome:
             self.back_rect.left + self.padding,
             self.back_rect.top,
             "<", self.font, "black"
+        ))
+        cmds.append(DrawOutline(self.forward_rect, "black", 1))
+        cmds.append(DrawText(
+            self.forward_rect.left + self.padding,
+            self.forward_rect.top,
+            ">", self.font, "black"
         ))
         cmds.append(DrawLine(
             0, self.bottom, self.width, self.bottom, "black", 1
