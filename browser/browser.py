@@ -31,6 +31,9 @@ class Browser:
         self.window.bind("<Button-4>", lambda e: self.scroll_page(-SCROLL_STEP))
         self.window.bind("<Button-5>", lambda e: self.scroll_page(SCROLL_STEP))
         self.window.bind("<Button-1>", self.handle_click)
+        self.window.bind("<Key>", self.handle_key)
+        self.window.bind("<Return>", self.handle_enter)
+        self.window.bind("<BackSpace>", self.handle_backspace)
 
     def handle_down(self, e):
         """Scroll the active document down by one keyboard unit."""
@@ -51,6 +54,22 @@ class Browser:
             self.scroll = 0
         if e.y < self.chrome.bottom:
             self.chrome.click(e.x, e.y)
+        self.draw()
+        
+    def handle_key(self, e):
+        if len(e.char) == 0:
+            return
+        if not (0x20 <= ord(e.char) < 0x7f):
+            return
+        self.chrome.keypress(e.char)
+        self.draw()
+        
+    def handle_enter(self, e):
+        self.chrome.enter()
+        self.draw()
+    
+    def handle_backspace(self, e):
+        self.chrome.backspace()
         self.draw()
 
     def new_tab(self, url):
@@ -165,6 +184,8 @@ class Chrome:
             self.width - self.padding,
             self.urllbar_bottom - self.padding
         )
+        self.focus = None
+        self.address_bar = ""
 
     def resize(self, width):
         """Update chrome geometry after the canvas is resized."""
@@ -188,11 +209,29 @@ class Chrome:
             self.browser.new_tab("https://browser.engineering")
         elif self.back_rect.contains_point(x, y):
             self.browser.active_tab.go_back()
+        elif self.address_rect.contains_point(x, y):
+            self.focus = "address bar"
+            self.address_bar = ""
         else:
             for i, tab in enumerate(self.browser.tabs):
                 if self.tab_rect(i).contains_point(x,y):
                     self.browser.active_tab = tab
                     break
+    
+    def keypress(self, char):
+        if self.focus == "address bar":
+            self.address_bar += char
+        
+    def enter(self):
+        if self.focus == "address bar":
+            self.browser.active_tab.load(self.address_bar)
+            self.focus = None
+    
+    def backspace(self):
+        if self.focus == "address bar":
+            if len(self.address_bar) == 0:
+                return
+            self.address_bar = self.address_bar[:-1]
 
     def paint(self):
         """Return drawing commands for the tab bar and its controls."""
@@ -237,11 +276,26 @@ class Chrome:
                     "black", 1
                 ))
         cmds.append(DrawOutline(self.address_rect, "black", 1))
-        url = str(self.browser.active_tab.page)
-        cmds.append(DrawText(
-            self.address_rect.left + self.padding,
-            self.address_rect.top,
-            url, self.font, "black"
-        ))
+        url = str(self.browser.active_tab.page)     
+        if self.focus == "address bar":
+            cmds.append(DrawText(
+                self.address_rect.left + self.padding,
+                self.address_rect.top,
+                self.address_bar, self.font, "black"
+            ))
+            w = self.font.measure(self.address_bar)
+            cmds.append(DrawLine(
+                self.address_rect.left + self.padding + w,
+                self.address_rect.top,
+                self.address_rect.left + self.padding + w,
+                self.address_rect.bottom,
+                "red", 1
+            ))
+        else:
+            cmds.append(DrawText(
+                self.address_rect.left + self.padding,
+                self.address_rect.top,
+                url, self.font, "black"
+            ))
 
         return cmds
