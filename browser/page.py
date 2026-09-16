@@ -31,6 +31,9 @@ class Page:
         self.original_url = url
         self.redirect_url = None
         self.view_source = False
+
+        url, separator, fragment = url.partition("#")
+        self.fragment = fragment if separator else None
         try:
             self.scheme, url = url.split(":", 1)
         except ValueError:
@@ -160,6 +163,10 @@ class Page:
     def resolve(self, url):
         """Resolve a relative or scheme-relative URL against this page."""
         url = self._normalize_url(url)
+
+        if url.startswith("#"):
+            return Page(self.original_url.split("#", 1)[0] + url)
+
         if "://" in url: 
             return Page(url)
         if not url.startswith("/"):
@@ -307,9 +314,17 @@ class Page:
             raise
     
     def __str__(self):
+        if self.scheme == "data":
+            value = self.scheme + ":" + self.data
+            return value + ("#" + self.fragment if self.fragment is not None else "")
+        if self.scheme == "file":
+            value = self.scheme + "://" + self.path
+            return value + ("#" + self.fragment if self.fragment is not None else "")
+
         port_part = ":" + str(self.port)
         if self.scheme == "https" and self.port == 443:
             port_part = ""
         if self.scheme == "http" and self.port == 80:
             port_part = ""
-        return self.scheme + "://" + self.host + port_part + self.path
+        value = self.scheme + "://" + self.host + port_part + self.path
+        return value + ("#" + self.fragment if self.fragment is not None else "")

@@ -153,6 +153,9 @@ class Browser:
         """Redraw page content, the scrollbar, and the browser chrome."""
         self.canvas.delete("all")
         if self.active_tab is not None:
+            if self.active_tab.fragment_scroll is not None:
+                self.scroll = self.active_tab.fragment_scroll
+                self.active_tab.fragment_scroll = None
             self.active_tab.draw(
                 self.canvas, self.scroll - self.chrome.bottom
             )

@@ -1,6 +1,7 @@
 """Document loading, styling, layout, and hit testing for a browser tab."""
 
 from pathlib import Path
+import urllib.parse
 
 from .page import Page
 from .element import Element
@@ -26,6 +27,7 @@ class Tab:
         self._layout_width = None
         self.tab_height = tab_height
         self.history = []
+        self.fragment_scroll = None
 
     def render_text(self, text, page=None):
         """Parse and lay out HTML text."""
@@ -35,6 +37,22 @@ class Tab:
         self.make_layout(text, self._layout_width or WIDTH, page)
         self.display_list = []
         paint_tree(self.layout, self.display_list)
+        self.fragment_scroll = self._fragment_scroll(page)
+
+    def _fragment_scroll(self, page):
+        """Return the document y-coordinate targeted by ``page.fragment``."""
+        if page is None or page.fragment is None:
+            return None
+
+        target = urllib.parse.unquote(page.fragment)
+        for layout_object in tree_to_list(self.layout, []):
+            node = layout_object.node
+            if not isinstance(node, Element):
+                continue
+            if (node.attributes.get("id") == target or
+                    node.attributes.get("name") == target):
+                return max(0, layout_object.y - self.layout.y)
+        return None
 
     def make_layout(self, body, width, page = None):
         """Parse, style, and lay out a document for the viewport width.
@@ -146,8 +164,18 @@ class Tab:
     def load(self, url):
         """Fetch and render ``url``, showing supported load errors in the UI."""
         try:
+            requested_page = Page(url)
+
+            if (self.page is not None and requested_page.fragment is not None
+                    and requested_page.original_url.split("#", 1)[0] ==
+                    self.page.original_url.split("#", 1)[0]):
+                self.history.append(url)
+                self.page = requested_page
+                self.fragment_scroll = self._fragment_scroll(requested_page)
+                return
+
             self.history.append(url)
-            page, body = load_page(Page(url))
+            page, body = load_page(requested_page)
             self.render_text(body, page=page)
             
         except (OSError, ValueError, RuntimeError) as error:
