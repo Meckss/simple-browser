@@ -223,11 +223,14 @@ def _expand_declarations_with_importance(declarations):
     expanded = {}
     for prop, raw_value in declarations.items():
         value, important = _split_important(raw_value)
-        values = (
-            expand_font_shorthand(value)
-            if prop == "font" and "var(" not in value.lower()
-            else {prop: value}
-        )
+        if prop == "font" and "var(" not in value.lower():
+            try:
+                values = expand_font_shorthand(value)
+            except ValueError:
+                # Fail silently, uses default values or longform
+                continue
+        else:
+            values = {prop: value}
         for expanded_prop, expanded_value in values.items():
             expanded[expanded_prop] = (expanded_value, important)
     return expanded
