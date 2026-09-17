@@ -16,6 +16,8 @@ extended as a hands-on systems programming project.
 - Supports `file://`, `data:`, and `view-source:` URLs
 - Parses a subset of HTML and CSS, including inline and external stylesheets
 - Lays out and renders styled text in a Tkinter window
+- Renders basic inline `<input>` fields and `<button>` controls, including
+  input values and button labels
 - Supports clickable links, back/forward navigation, scrolling, and window
   resizing
 - Includes browser chrome with a tab strip, new-tab control, back and forward
@@ -33,8 +35,8 @@ from Chapter 7 of the book. The remaining roadmap follows Chapters 8–16.
 - [x] Implement hyperlinks and clickable `<a>` elements
 - [x] Build browser chrome with tab and navigation controls
 - [x] Add tabbed browsing and per-tab back/forward history
-- [ ] Chapter 8 — **Sending Information to Servers**: forms, editable input
-  widgets, form submission, HTTP `POST` requests, and web applications
+- [ ] Chapter 8 — **Sending Information to Servers**: editable controls,
+  form submission, HTTP `POST` requests, and web applications
 - [ ] Chapter 9 — **Running Interactive Scripts**: JavaScript execution, DOM
   manipulation, event handling, and event defaults
 - [ ] Chapter 10 — **Keeping Data Private**: cookies, same-origin policy,
@@ -105,7 +107,7 @@ Usage: python main.py URL
 - `browser/networking/` — URL parsing, socket connections, TLS, and response decoding
 - `browser/html/` — HTML parsing and document tree types
 - `browser/css/` — CSS parsing, selectors, and styling
-- `browser/layout/` — document, block, line, and text layout
+- `browser/layout/` — document, block, line, text, and form-control layout
 - `browser/rendering/` — drawing commands and font helpers
 - `browser/ui/` — Tkinter UI, tabs, and navigation
 

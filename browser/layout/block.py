@@ -11,6 +11,7 @@ from ..rendering.font_utils import get_font
 from .base import Layout
 from .line import LineLayout
 from .text import TextLayout
+from .input import INPUT_WIDTH_PX, InputLayout
 
 def _is_auto(value):
     """Return whether a CSS value is the ``auto`` keyword."""
@@ -35,12 +36,12 @@ class BlockLayout(Layout):
         """
         super().__init__(node, parent, previous)
         self.cursor_x = 0
-        
+
     def layout_mode(self):
         """Return the layout mode required by this node's children.
 
         A node containing a block-level child uses block layout; all other
-        nodes with content use inline layout.
+        nodes with content, including form controls, use inline layout.
         """
         if isinstance(self.node, Text):
             return "inline"
@@ -52,7 +53,7 @@ class BlockLayout(Layout):
         ):
             return "block"
 
-        if self.node.children:
+        if self.node.children or self.node.tag in ("input", "button"):
             return "inline"
         return "block"
         
@@ -141,7 +142,8 @@ class BlockLayout(Layout):
         """Return the background drawing commands for this layout object.
 
         Inline text is painted by descendant ``TextLayout`` objects during
-        the normal recursive paint-tree traversal.
+        the normal recursive paint-tree traversal. Input and button nodes
+        are painted by their dedicated ``InputLayout`` descendants.
         """
         cmds = []
         if isinstance(self.node, Element):
@@ -149,7 +151,12 @@ class BlockLayout(Layout):
             if bgcolor != "transparent":
                 cmds.append(DrawRect(self.self_rect(), bgcolor))
         return cmds
-            
+
+    def should_paint(self):
+        """Skip wrapper paint for controls represented by ``InputLayout``."""
+        return isinstance(self.node, Text) or \
+            (self.node.tag != "input" and self.node.tag != "button")
+
     def process_tree(self, tree):
         """Traverse an inline subtree and build its line layout objects.
 
@@ -164,6 +171,9 @@ class BlockLayout(Layout):
             return
 
         self.enter_tag(tree)
+        if tree.tag in ("input", "button"):
+            # Replaced controls paint their value or label themselves.
+            return
         for child in tree.children:
             self.process_tree(child)
         self.exit_tag(tree)
@@ -204,12 +214,29 @@ class BlockLayout(Layout):
             return
         new_line = LineLayout(self.node, self, last_line)
         self.children.append(new_line)
-    
+
+    def input(self, node):
+        """Append a fixed-width input or button control to the current line.
+
+        Controls wrap to a new line when their 200-pixel width does not fit.
+        Their font is also used to reserve the trailing inter-control space.
+        """
+        w = INPUT_WIDTH_PX
+        if self.cursor_x + w > self.width - HSTEP:
+            self.new_line()
+        line = self.children[-1]
+        previous_word = line.children[-1] if line.children else None
+        control = InputLayout(node, line, previous_word)
+        line.children.append(control)
+        self.cursor_x += w + control.font.measure(" ")
+
     def enter_tag(self, tag):
-        """Apply layout behavior associated with entering an inline tag."""
+        """Apply layout behavior associated with an inline element."""
         handler = {"br": self._enter_line_break}.get(tag.tag)
         if handler:
             handler()
+        elif tag.tag in ("input", "button"):
+            self.input(tag)
 
     def _enter_line_break(self):
         """Add line-break spacing and begin a following inline line."""

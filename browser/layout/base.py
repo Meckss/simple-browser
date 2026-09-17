@@ -30,6 +30,15 @@ class Layout:
         """Return drawing commands emitted by this layout object."""
         return []
 
+    def should_paint(self):
+        """Return whether this object participates in paint traversal.
+
+        Layout subclasses can return ``False`` when a node is represented by
+        a different layout object. The default is to visit the object and
+        its descendants.
+        """
+        return True
+
     def self_rect(self):
         """Return this layout object's bounds as a :class:`Rect`."""
         return Rect(self.x, self.y,

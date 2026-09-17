@@ -234,8 +234,14 @@ def load_page(page, max_redirects = 10):
     return page, body
 
 def paint_tree(layout_object, display_list):
-    """Append paint commands for a layout tree in pre-order."""
-    display_list.extend(layout_object.paint())
-    
+    """Append paint commands in layout-tree pre-order.
+
+    Each layout object may opt out of painting while its descendants remain
+    traversable; this lets wrapper layouts delegate rendering to a specialized
+    child such as ``InputLayout``.
+    """
+    if layout_object.should_paint():
+        display_list.extend(layout_object.paint())
+
     for child in layout_object.children:
         paint_tree(child, display_list)
