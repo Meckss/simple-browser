@@ -186,6 +186,18 @@ class Tab:
         self.repaint()
         return True
 
+    def enter(self):
+        """Submit the form containing the focused input, if any."""
+        if self.focus is None:
+            return False
+
+        elt = self.focus.parent
+        while elt:
+            if elt.tag == "form":
+                return self.submit_form(elt)
+            elt = elt.parent
+        return False
+
     def backspace(self):
         """Remove the final character from the focused input element."""
         if self.focus is None:

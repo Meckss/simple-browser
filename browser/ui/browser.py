@@ -90,6 +90,8 @@ class Browser:
         """Route Enter to the component that currently owns focus."""
         if self.chrome.focus == "address bar":
             handled = self.chrome.enter()
+        elif self.focus == "content" and self.active_tab is not None:
+            handled = self.active_tab.enter()
         else:
             handled = False
 

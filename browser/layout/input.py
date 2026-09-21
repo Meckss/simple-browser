@@ -13,8 +13,8 @@ class InputLayout(Layout):
     """Lay out and paint one simple editable form control.
 
     ``input`` controls display their ``value`` attribute, while ``button``
-    controls display a single direct text child. These controls are visual
-    only for now; form submission is not implemented.
+    controls display a single direct text child. Submission is handled by the
+    owning tab when a button is clicked or Enter is pressed in an input.
     """
 
     def __init__(self, node, parent, previous):
