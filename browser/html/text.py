@@ -7,6 +7,8 @@ class Text:
         self.text = text
         self.parent = parent
         self.children = []
+        self.is_focused = False
+
         
     def __repr__(self):
         """Return the node's text using its normal string representation."""

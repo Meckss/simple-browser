@@ -29,9 +29,13 @@ class Tab:
         self.history = []
         self.forward_history = []
         self.fragment_scroll = None
+        self.focus = None
 
     def render_text(self, text, page=None):
         """Parse and lay out HTML text."""
+        if self.focus:
+            self.focus.is_focused = False
+            self.focus = None
         self.text = text
         self.page = page
 
@@ -114,6 +118,9 @@ class Tab:
         Returns:
             bool: Whether the click navigated to another URL.
         """
+        if self.focus:
+            self.focus.is_focused = False
+            self.focus = None
         y += scroll
         objs = [obj for obj in tree_to_list(self.layout, [])
                 if obj.x <= x < obj.x + obj.width
@@ -127,9 +134,39 @@ class Tab:
                 url = self.page.resolve(elt.attributes["href"])
                 self.load(url.original_url)
                 return True
+            elif elt.tag == "input":
+                elt.attributes["value"] = ""
+                self.focus = elt
+                elt.is_focused = True
+                self.repaint()
+                return False
             elt = elt.parent
         return False
+
+    def repaint(self):
+        """Repaint the current document without reflowing."""
+        self.display_list = []
+        paint_tree(self.layout, self.display_list)
         
+    def keypress(self, char):
+        """Append ``char`` to the value of the focused input element."""
+        if self.focus is None:
+            return False
+        self.focus.attributes["value"] += char
+        self.repaint()
+        return True
+
+    def backspace(self):
+        """Remove the final character from the focused input element."""
+        if self.focus is None:
+            return False
+        value = self.focus.attributes.get("value", "")
+        if not value:
+            return False
+        self.focus.attributes["value"] = value[:-1]
+        self.repaint()
+        return True
+
     def draw(self, canvas, scroll=0):
         """Paint visible display commands onto ``canvas``."""
         canvas_height = canvas.winfo_height()
@@ -175,7 +212,7 @@ class Tab:
         )
         
         self.render_text(error_text)
-    
+        
     def load(self, url):
         """Fetch and render ``url``, showing supported load errors in the UI."""
         self._load(url, record_history=True)

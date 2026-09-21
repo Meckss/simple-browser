@@ -22,6 +22,7 @@ class Browser:
     def __init__(self):
         """Create the browser window and install its event handlers."""
         self.tabs = []
+        self.focus = None
         self.active_tab = None
         self.window = tkinter.Tk()
         self.chrome = Chrome(self)
@@ -62,27 +63,50 @@ class Browser:
         if navigated:
             self.scroll = 0
         if e.y < self.chrome.bottom:
+            self.focus = None
             self.chrome.click(e.x, e.y)
+        else:
+            self.focus = "content"
+            self.chrome.blur()
         self.draw()
         
     def handle_key(self, e):
-        """Add a printable key event's character to the address bar."""
+        """Route a printable character to the focused UI component."""
         if len(e.char) == 0:
             return
         if not (0x20 <= ord(e.char) < 0x7f):
             return
-        self.chrome.keypress(e.char)
-        self.draw()
+        if self.chrome.focus == "address bar":
+            handled = self.chrome.keypress(e.char)
+        elif self.focus == "content" and self.active_tab is not None:
+            handled = self.active_tab.keypress(e.char)
+        else:
+            handled = False
+
+        if handled:
+            self.draw()
         
     def handle_enter(self, e):
-        """Handle Enter by navigating to the address-bar contents."""
-        self.chrome.enter()
-        self.draw()
+        """Route Enter to the component that currently owns focus."""
+        if self.chrome.focus == "address bar":
+            handled = self.chrome.enter()
+        else:
+            handled = False
+
+        if handled:
+            self.draw()
     
     def handle_backspace(self, e):
-        """Handle Backspace by removing the last address-bar character."""
-        self.chrome.backspace()
-        self.draw()
+        """Route Backspace to the component that currently owns focus."""
+        if self.chrome.focus == "address bar":
+            handled = self.chrome.backspace()
+        elif self.focus == "content" and self.active_tab is not None:
+            handled = self.active_tab.backspace()
+        else:
+            handled = False
+
+        if handled:
+            self.draw()
 
     def new_tab(self, url):
         """Create, load, and activate a tab for ``url``.
@@ -228,6 +252,10 @@ class Chrome:
         self.width = width
         self.address_rect.right = width - self.padding
 
+    def blur(self):
+        """Remove focus from the address bar."""
+        self.focus = None
+
     def tab_rect(self, i):
         """Return the tab-bar rectangle for the tab at index ``i``.
 
@@ -272,6 +300,8 @@ class Chrome:
         """Append ``char`` to the address bar when it has focus."""
         if self.focus == "address bar":
             self.address_bar += char
+            return True
+        return False
         
     def enter(self):
         """Submit the focused address bar as a URL or Google search.
@@ -302,13 +332,17 @@ class Chrome:
             if url:
                 self.browser.active_tab.load(url)
             self.focus = None
+            return True
+        return False
     
     def backspace(self):
         """Remove the final address-bar character when it has focus."""
-        if self.focus == "address bar":
-            if len(self.address_bar) == 0:
-                return
-            self.address_bar = self.address_bar[:-1]
+        if self.focus != "address bar":
+            return False
+        if len(self.address_bar) == 0:
+            return False
+        self.address_bar = self.address_bar[:-1]
+        return True
 
     def paint(self):
         """Return drawing commands for the tabs and browser controls.

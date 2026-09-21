@@ -1,7 +1,7 @@
 """Layout and painting for replaced form controls."""
 
 from ..html.text import Text
-from ..rendering.draw import DrawRect, DrawText
+from ..rendering.draw import DrawLine, DrawRect, DrawText
 from ..rendering.font_utils import get_font
 from .base import Layout
 
@@ -10,11 +10,11 @@ INPUT_WIDTH_PX = 200
 
 
 class InputLayout(Layout):
-    """Lay out and paint one non-editable form control.
+    """Lay out and paint one simple editable form control.
 
     ``input`` controls display their ``value`` attribute, while ``button``
     controls display a single direct text child. These controls are visual
-    only for now; keyboard editing and form submission are not implemented.
+    only for now; form submission is not implemented.
     """
 
     def __init__(self, node, parent, previous):
@@ -46,6 +46,9 @@ class InputLayout(Layout):
                 text = self.node.children[0].text
             else:
                 text = ""
+        if self.node.is_focused:
+            cx = self.x + self.font.measure(text)
+            cmds.append(DrawLine(cx, self.y, cx, self.y + self.height, "black", 1))
         color = self.node.style.get("color", "black")
         cmds.append(DrawText(self.x, self.y, text, self.font, color))
         return cmds

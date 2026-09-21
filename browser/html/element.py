@@ -11,6 +11,7 @@ class Element:
         self.attributes = attributes
         self.parent = parent
         self.children = []
+        self.is_focused = False
 
     def is_rendered(self):
         """Return whether this element's contents participate in rendering."""
