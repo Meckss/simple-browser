@@ -35,7 +35,7 @@ from Chapter 7 of the book. The remaining roadmap follows Chapters 8–16.
 - [x] Implement hyperlinks and clickable `<a>` elements
 - [x] Build browser chrome with tab and navigation controls
 - [x] Add tabbed browsing and per-tab back/forward history
-- [ ] Chapter 8 — **Sending Information to Servers**: editable controls,
+- [x] Chapter 8 — **Sending Information to Servers**: editable controls,
   form submission, HTTP `POST` requests, and web applications
 - [ ] Chapter 9 — **Running Interactive Scripts**: JavaScript execution, DOM
   manipulation, event handling, and event defaults
