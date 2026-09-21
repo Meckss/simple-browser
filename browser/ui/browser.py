@@ -57,15 +57,16 @@ class Browser:
         """
         if self.active_tab is None:
             return
-        navigated = self.active_tab.click(
-            e.x, e.y - self.chrome.bottom, self.scroll
-        )
-        if navigated:
-            self.scroll = 0
         if e.y < self.chrome.bottom:
+            self.active_tab.blur()
             self.focus = None
             self.chrome.click(e.x, e.y)
         else:
+            navigated = self.active_tab.click(
+                e.x, e.y - self.chrome.bottom, self.scroll
+            )
+            if navigated:
+                self.scroll = 0
             self.focus = "content"
             self.chrome.blur()
         self.draw()

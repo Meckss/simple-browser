@@ -33,9 +33,7 @@ class Tab:
 
     def render_text(self, text, page=None):
         """Parse and lay out HTML text."""
-        if self.focus:
-            self.focus.is_focused = False
-            self.focus = None
+        self.blur()
         self.text = text
         self.page = page
 
@@ -43,6 +41,12 @@ class Tab:
         self.display_list = []
         paint_tree(self.layout, self.display_list)
         self.fragment_scroll = self._fragment_scroll(page)
+
+    def blur(self):
+        """Remove focus from the currently focused page control."""
+        if self.focus:
+            self.focus.is_focused = False
+            self.focus = None
 
     def _fragment_scroll(self, page):
         """Return the document y-coordinate targeted by ``page.fragment``."""
@@ -118,9 +122,7 @@ class Tab:
         Returns:
             bool: Whether the click navigated to another URL.
         """
-        if self.focus:
-            self.focus.is_focused = False
-            self.focus = None
+        self.blur()
         y += scroll
         objs = [obj for obj in tree_to_list(self.layout, [])
                 if obj.x <= x < obj.x + obj.width
