@@ -13,8 +13,19 @@ class WebResource(URL):
     # Kept as a compatibility alias for code that inspects the connection pool.
     connections = _connection_pool.connections
 
-    def request(self):
-        """Fetch this page and return its response decoded as UTF-8 text."""
+    def request(self, payload=None):
+        """Fetch this resource, optionally sending a POST payload.
+
+        Args:
+            payload: Optional UTF-8 form-encoded request body. When omitted,
+                the resource is fetched with GET.
+
+        Returns:
+            str: The response body decoded as UTF-8 text.
+        """
         if self.scheme in ("data", "file"):
             return load_local(self)
-        return HTTPClient(self._connection_pool).get(self)
+        client = HTTPClient(self._connection_pool)
+        if payload is None:
+            return client.get(self)
+        return client.post(self, payload)

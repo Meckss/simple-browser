@@ -140,8 +140,38 @@ class Tab:
                 elt.is_focused = True
                 self.repaint()
                 return False
+            elif elt.tag == "button":
+                while elt:
+                    if elt.tag == "form" and "action" in elt.attributes:
+                        return self.submit_form(elt)
+                    elt = elt.parent
             elt = elt.parent
         return False
+
+    def submit_form(self, elt):
+        """Submit the named ``input`` controls belonging to a form.
+
+        The form data is encoded as ``application/x-www-form-urlencoded``
+        and submitted to the form's action URL as a POST request.
+
+        Args:
+            elt: The form element to submit.
+
+        Returns:
+            bool: Whether form submission started a navigation.
+        """
+        inputs = [node for node in tree_to_list(elt, [])
+                  if isinstance(node, Element)
+                  and node.tag == "input" and "name" in node.attributes]
+        fields = []
+        for input in inputs:
+            name = input.attributes["name"]
+            value = input.attributes.get("value", "")
+            fields.append([name, value])
+        body = form_encode(fields)
+        url = self.page.resolve(elt.attributes.get("action", ""))
+        self.load(url.original_url, payload=body)
+        return True
 
     def repaint(self):
         """Repaint the current document without reflowing."""
@@ -213,12 +243,21 @@ class Tab:
         
         self.render_text(error_text)
         
-    def load(self, url):
-        """Fetch and render ``url``, showing supported load errors in the UI."""
-        self._load(url, record_history=True)
+    def load(self, url, payload= None):
+        """Fetch and render a URL, optionally submitting a request payload.
 
-    def _load(self, url, record_history):
-        """Fetch and render a URL, optionally recording a new navigation."""
+        Args:
+            url: The URL to request.
+            payload: Optional form-encoded data to send as a POST body.
+        """
+        self._load(url, record_history=True, payload=payload)
+
+    def _load(self, url, record_history, payload=None):
+        """Fetch and render a URL, optionally recording a new navigation.
+
+        ``payload`` is passed through to the resource request and is not
+        added to the URL or navigation history separately.
+        """
         try:
             requested_page = WebResource(url)
 
@@ -233,15 +272,20 @@ class Tab:
                 self.fragment_scroll = self._fragment_scroll(requested_page)
                 return
 
-            page, body = load_page(requested_page)
+            page, body = load_page(requested_page, payload = payload)
             self.render_text(body, page=page)
             
         except (OSError, ValueError, RuntimeError) as error:
             self.show_error("Unable to load page", str(error))
         
         
-def load_page(page, max_redirects = 10):
+def load_page(page, max_redirects=10, payload=None):
     """Request a page and follow redirects up to ``max_redirects`` times.
+
+    Args:
+        page: The initial web resource to request.
+        max_redirects: Maximum number of redirects to follow.
+        payload: Optional form-encoded POST body.
 
     Returns:
         tuple[WebResource, str]: The final resource and its response body.
@@ -251,7 +295,7 @@ def load_page(page, max_redirects = 10):
     """
     redirects_followed = 0
     while True:
-        body = page.request()
+        body = page.request(payload)
         
         if page.redirect_url is None:
             break
@@ -282,3 +326,38 @@ def paint_tree(layout_object, display_list):
 
     for child in layout_object.children:
         paint_tree(child, display_list)
+
+def form_encode(fields):
+    """Encode name/value pairs as form-urlencoded data.
+
+    Spaces become ``+`` and non-ASCII characters are encoded from their
+    UTF-8 bytes using percent escapes.
+    """
+    parts = []
+
+    for name, value in fields:
+        parts.append(
+            form_quote(name) + "=" + form_quote(value)
+        )
+
+    return "&".join(parts)
+
+
+def form_quote(value):
+    """Encode one form field name or value without importing a helper."""
+    result = ""
+
+    for byte in str(value).encode("utf-8"):
+        if (
+            0x30 <= byte <= 0x39 or  # 0-9
+            0x41 <= byte <= 0x5A or  # A-Z
+            0x61 <= byte <= 0x7A or  # a-z
+            byte in (0x2D, 0x2E, 0x5F, 0x7E)  # - . _ ~
+        ):
+            result += chr(byte)
+        elif byte == 0x20:
+            result += "+"
+        else:
+            result += "%{:02X}".format(byte)
+
+    return result
