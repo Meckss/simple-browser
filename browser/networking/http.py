@@ -59,6 +59,8 @@ class HTTPClient:
             content = self._decode_content(
                 content, response_headers.get("content-encoding", "").casefold()
             )
+            if response_headers.get("connection", "").casefold() == "close":
+                self.connections.discard(page, sock)
             return content.decode("utf-8", errors="replace")
         except (ConnectionError, BrokenPipeError, ConnectionResetError, OSError):
             self.connections.discard(page, sock)
@@ -121,6 +123,8 @@ class HTTPClient:
             content = self._decode_content(
                 content, response_headers.get("content-encoding", "").casefold()
             )
+            if response_headers.get("connection", "").casefold() == "close":
+                self.connections.discard(page, sock)
             return content.decode("utf-8", errors="replace")
         except (ConnectionError, BrokenPipeError, ConnectionResetError, OSError):
             self.connections.discard(page, sock)
