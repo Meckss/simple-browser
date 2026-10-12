@@ -2,14 +2,16 @@
 
 from pathlib import Path
 
-from browser.css.parser import CSSParser
 import dukpy
+
+from browser.css.parser import CSSParser
 
 
 class JSContext:
     """Execute page scripts and expose selected browser APIs to JavaScript."""
 
-    RUNTIME_JS = (Path(__file__).with_name("runtime.js").read_text())
+    RUNTIME_JS = Path(__file__).with_name("runtime.js").read_text()
+    EVENT_DISPATCH_JS = "new Node(dukpy.handle).dispatchEvent(dukpy.event_type)"
 
     def __init__(self, tab):
         """Create a JavaScript interpreter associated with ``tab``.
@@ -92,3 +94,21 @@ class JSContext:
         node = self.handle_to_node[handle]
         attr = node.attributes.get(attr, None)
         return attr if attr else ""
+
+    def dispatch_event(self, event_type, elt):
+        """Dispatch an event to an element's registered JavaScript listeners.
+
+        The element is converted to its stable integer handle before the
+        event is dispatched inside the JavaScript interpreter. Listeners run
+        with the element's ``Node`` wrapper as ``this``.
+
+        Args:
+            event_type: The event type, e.g. ``"click"`` or ``"submit"``.
+            elt: The parsed HTML element to dispatch the event to.
+        """
+        handle = self.get_handle(elt)
+        self.interpreter.evaljs(
+            self.EVENT_DISPATCH_JS,
+            event_type=event_type,
+            handle=handle,
+        )

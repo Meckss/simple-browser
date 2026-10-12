@@ -2,7 +2,6 @@
 
 from pathlib import Path
 import urllib.parse
-import dukpy
 
 from ..networking.webresource import WebResource
 from ..html.element import Element
@@ -15,9 +14,11 @@ from ..html.tree_utils import tree_to_list
 from ..css.selector import cascade_priority
 from .constants import WIDTH
 from ..js.jscontext import JSContext
+
 STYLE_SHEET_PATH = Path(__file__).parents[1] / "browser.css"
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 STYLESHEET_CACHE = {}
+
 
 class Tab:
     """Own the document, navigation state, and rendering state for a tab.
@@ -43,8 +44,8 @@ class Tab:
         self.fragment_scroll = None
         self.focus = None
         self.elementNodes = []
-        self.js = JSContext(self)
         self.scripts = []
+        self.js = JSContext(self)
 
     def render_text(self, text, page=None):
         """Parse, style, lay out, and paint an HTML document.
@@ -151,7 +152,11 @@ class Tab:
         paint_tree(self.layout, self.display_list)
 
     def click(self, x, y, scroll=0):
-        """Follow a link hit at viewport coordinates ``x``, ``y``.
+        """Dispatch a click and apply the default action at ``x``, ``y``.
+
+        Links navigate, inputs receive focus, and buttons may submit their
+        containing form. The corresponding JavaScript ``click`` listener is
+        dispatched before the default action.
 
         Args:
             x: Horizontal viewport coordinate of the click.
@@ -167,22 +172,26 @@ class Tab:
         objs = [obj for obj in tree_to_list(self.layout, [])
                 if obj.x <= x < obj.x + obj.width
                 and obj.y <= y < obj.y + obj.height]
-        if not objs: return
+        if not objs:
+            return
         elt = objs[-1].node
         while elt:
             if isinstance(elt, Text):
                 pass
             elif elt.tag == "a" and "href" in elt.attributes:
+                self.js.dispatch_event("click", elt)
                 url = self.page.resolve(elt.attributes["href"])
                 self.load(url.original_url)
                 return True
             elif elt.tag == "input":
+                self.js.dispatch_event("click", elt)
                 elt.attributes["value"] = ""
                 self.focus = elt
                 elt.is_focused = True
                 self.repaint()
                 return False
             elif elt.tag == "button":
+                self.js.dispatch_event("click", elt)
                 while elt:
                     if elt.tag == "form" and "action" in elt.attributes:
                         return self.submit_form(elt)
@@ -191,7 +200,7 @@ class Tab:
         return False
 
     def submit_form(self, elt):
-        """Submit the named ``input`` controls belonging to a form.
+        """Dispatch ``submit`` and submit a form's named ``input`` controls.
 
         The form data is encoded as ``application/x-www-form-urlencoded``
         and submitted to the form's action URL as a POST request.
@@ -202,6 +211,7 @@ class Tab:
         Returns:
             bool: Whether form submission started a navigation.
         """
+        self.js.dispatch_event("submit", elt)
         inputs = [node for node in tree_to_list(elt, [])
                   if isinstance(node, Element)
                   and node.tag == "input" and "name" in node.attributes]
@@ -221,7 +231,10 @@ class Tab:
         paint_tree(self.layout, self.display_list)
         
     def keypress(self, char):
-        """Append ``char`` to the value of the focused input element.
+        """Dispatch ``keydown`` and append ``char`` to the focused input.
+
+        The event is dispatched before the character is added, so listeners
+        observe the input's value as it was before the keypress.
 
         Args:
             char: Character to append.
@@ -231,6 +244,7 @@ class Tab:
         """
         if self.focus is None:
             return False
+        self.js.dispatch_event("keydown", self.focus)
         self.focus.attributes["value"] += char
         self.repaint()
         return True
@@ -276,8 +290,10 @@ class Tab:
         canvas_height = canvas.winfo_height()
 
         for cmd in self.display_list:
-            if cmd.top > scroll + canvas_height: continue
-            if cmd.bottom < scroll: continue
+            if cmd.top > scroll + canvas_height:
+                continue
+            if cmd.bottom < scroll:
+                continue
             cmd.execute(scroll, canvas)
 
     def go_back(self):
@@ -361,7 +377,7 @@ class Tab:
                 script_url = page.resolve(script.attributes["src"])
                 try:
                     body = script_url.request()
-                except:
+                except (OSError, ValueError, RuntimeError):
                     continue
                 self.js.run(body)
             self.render_text(body, page=page)
