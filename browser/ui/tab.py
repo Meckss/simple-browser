@@ -14,6 +14,7 @@ from ..css.parser import CSSParser
 from ..html.tree_utils import tree_to_list
 from ..css.selector import cascade_priority
 from .constants import WIDTH
+from ..js.jscontext import JSContext
 STYLE_SHEET_PATH = Path(__file__).parents[1] / "browser.css"
 DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).parse()
 STYLESHEET_CACHE = {}
@@ -31,6 +32,9 @@ class Tab:
         self.forward_history = []
         self.fragment_scroll = None
         self.focus = None
+        self.elementNodes = []
+        self.js = JSContext(self)
+        self.scripts = []
 
     def render_text(self, text, page=None):
         """Parse and lay out HTML text."""
@@ -73,8 +77,8 @@ class Tab:
         self._layout_width = width
         root = HTMLParser(body).parse_html()
         rules = DEFAULT_STYLE_SHEET.copy()
-        flattened = [node for node in tree_to_list(root, []) if isinstance(node, Element)]
-        for node in flattened:
+        self.elementNodes = [node for node in tree_to_list(root, []) if isinstance(node, Element)]
+        for node in self.elementNodes:
             if node.tag == "style":
                 stylesheet = "".join(
                     child.text for child in node.children
@@ -98,7 +102,7 @@ class Tab:
                 except OSError:
                     continue
                 rules.extend(stylesheet_rules)
-        scripts = [node for node in flattened if node.tag == "script" and "src" in node.attributes]
+        self.scripts = [node for node in self.elementNodes if node.tag == "script" and "src" in node.attributes]
         style(root, sorted(rules, key = cascade_priority))
         self.layout = DocumentLayout(root, width)
         self.layout.layout()
@@ -286,13 +290,13 @@ class Tab:
                 return
 
             page, body = load_page(requested_page, payload = payload)
-            for script in scripts:
-                script_url = page.resolve(script)
+            for script in self.scripts:
+                script_url = page.resolve(script.attributes["src"])
                 try:
                     body = script_url.request()
                 except:
                     continue
-                print("Script returned: ", dukpy.eval_js(body))
+                self.js.run(body)
             self.render_text(body, page=page)
             
         except (OSError, ValueError, RuntimeError) as error:
