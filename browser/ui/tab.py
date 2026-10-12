@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import urllib.parse
+import dukpy
 
 from ..networking.webresource import WebResource
 from ..html.element import Element
@@ -72,10 +73,8 @@ class Tab:
         self._layout_width = width
         root = HTMLParser(body).parse_html()
         rules = DEFAULT_STYLE_SHEET.copy()
-
-        for node in tree_to_list(root, []):
-            if not isinstance(node, Element):
-                continue
+        flattened = [node for node in tree_to_list(root, []) if isinstance(node, Element)]
+        for node in flattened:
             if node.tag == "style":
                 stylesheet = "".join(
                     child.text for child in node.children
@@ -99,7 +98,7 @@ class Tab:
                 except OSError:
                     continue
                 rules.extend(stylesheet_rules)
-
+        scripts = [node for node in flattened if node.tag == "script" and "src" in node.attributes]
         style(root, sorted(rules, key = cascade_priority))
         self.layout = DocumentLayout(root, width)
         self.layout.layout()
@@ -287,6 +286,13 @@ class Tab:
                 return
 
             page, body = load_page(requested_page, payload = payload)
+            for script in scripts:
+                script_url = page.resolve(script)
+                try:
+                    body = script_url.request()
+                except:
+                    continue
+                print("Script returned: ", dukpy.eval_js(body))
             self.render_text(body, page=page)
             
         except (OSError, ValueError, RuntimeError) as error:
