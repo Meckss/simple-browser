@@ -20,9 +20,19 @@ DEFAULT_STYLE_SHEET = CSSParser(STYLE_SHEET_PATH.read_text(encoding="utf8")).par
 STYLESHEET_CACHE = {}
 
 class Tab:
-    """Own the document displayed in one browser tab."""
+    """Own the document, navigation state, and rendering state for a tab.
+
+    A tab coordinates document parsing, CSS styling, layout, painting, form
+    interaction, navigation history, and the JavaScript context associated
+    with the current document.
+    """
+
     def __init__(self, tab_height):
-        """Create an empty tab with a content viewport ``tab_height`` high."""
+        """Create an empty tab with a content viewport ``tab_height`` high.
+
+        Args:
+            tab_height: Height of the content viewport in pixels.
+        """
         self.page = None
         self.text = ""
         self.layout = None
@@ -37,7 +47,12 @@ class Tab:
         self.scripts = []
 
     def render_text(self, text, page=None):
-        """Parse and lay out HTML text."""
+        """Parse, style, lay out, and paint an HTML document.
+
+        Args:
+            text: HTML source to display.
+            page: Optional resource metadata used to resolve relative URLs.
+        """
         self.blur()
         self.text = text
         self.page = page
@@ -54,7 +69,15 @@ class Tab:
             self.focus = None
 
     def _fragment_scroll(self, page):
-        """Return the document y-coordinate targeted by ``page.fragment``."""
+        """Return the document y-coordinate targeted by ``page.fragment``.
+
+        Args:
+            page: Resource metadata containing the fragment identifier.
+
+        Returns:
+            The target y-coordinate relative to the document, or ``None`` if
+            the page has no fragment or no matching element.
+        """
         if page is None or page.fragment is None:
             return None
 
@@ -73,6 +96,11 @@ class Tab:
 
         Recording ``width`` lets :meth:`resize` ignore duplicate configure
         events that do not require reflow.
+
+        Args:
+            body: HTML source to parse.
+            width: Layout viewport width in pixels.
+            page: Optional resource metadata used to resolve stylesheets.
         """
         self._layout_width = width
         root = HTMLParser(body).parse_html()
@@ -112,6 +140,9 @@ class Tab:
 
         Repeated resize notifications for the current layout width are
         ignored to avoid duplicate parsing and layout work.
+
+        Args:
+            width: New layout viewport width in pixels.
         """
         if width <= 0 or not self.text or width == self._layout_width:
             return
@@ -122,8 +153,14 @@ class Tab:
     def click(self, x, y, scroll=0):
         """Follow a link hit at viewport coordinates ``x``, ``y``.
 
+        Args:
+            x: Horizontal viewport coordinate of the click.
+            y: Vertical viewport coordinate of the click.
+            scroll: Current vertical document scroll offset.
+
         Returns:
-            bool: Whether the click navigated to another URL.
+            ``True`` when navigation starts, ``False`` when the click is
+            handled without navigation, or ``None`` when no object is hit.
         """
         self.blur()
         y += scroll
@@ -184,7 +221,14 @@ class Tab:
         paint_tree(self.layout, self.display_list)
         
     def keypress(self, char):
-        """Append ``char`` to the value of the focused input element."""
+        """Append ``char`` to the value of the focused input element.
+
+        Args:
+            char: Character to append.
+
+        Returns:
+            ``True`` when a focused control was updated; otherwise ``False``.
+        """
         if self.focus is None:
             return False
         self.focus.attributes["value"] += char
@@ -192,7 +236,11 @@ class Tab:
         return True
 
     def enter(self):
-        """Submit the form containing the focused input, if any."""
+        """Submit the form containing the focused input, if any.
+
+        Returns:
+            ``True`` when a form is submitted; otherwise ``False``.
+        """
         if self.focus is None:
             return False
 
@@ -204,7 +252,11 @@ class Tab:
         return False
 
     def backspace(self):
-        """Remove the final character from the focused input element."""
+        """Remove the final character from the focused input element.
+
+        Returns:
+            ``True`` when a character is removed; otherwise ``False``.
+        """
         if self.focus is None:
             return False
         value = self.focus.attributes.get("value", "")
@@ -215,7 +267,12 @@ class Tab:
         return True
 
     def draw(self, canvas, scroll=0):
-        """Paint visible display commands onto ``canvas``."""
+        """Paint visible display commands onto ``canvas``.
+
+        Args:
+            canvas: Tk canvas receiving the display commands.
+            scroll: Current vertical document scroll offset.
+        """
         canvas_height = canvas.winfo_height()
 
         for cmd in self.display_list:
@@ -245,7 +302,12 @@ class Tab:
         return bool(self.forward_history)
 
     def show_error(self, title, error):
-        """Render a user-facing error page with the supplied message."""
+        """Render a user-facing error page with the supplied message.
+
+        Args:
+            title: Short description of the failed operation.
+            error: Detailed error text to show below the title.
+        """
         error_text = (
             f"{title}\n\n"
             f"{error}\n\n"
@@ -274,6 +336,11 @@ class Tab:
 
         ``payload`` is passed through to the resource request and is not
         added to the URL or navigation history separately.
+
+        Args:
+            url: URL to request.
+            record_history: Whether to append the URL to navigation history.
+            payload: Optional form-encoded data to send as a POST body.
         """
         try:
             requested_page = WebResource(url)
@@ -344,6 +411,10 @@ def paint_tree(layout_object, display_list):
     Each layout object may opt out of painting while its descendants remain
     traversable; this lets wrapper layouts delegate rendering to a specialized
     child such as ``InputLayout``.
+
+    Args:
+        layout_object: Current layout-tree node to visit.
+        display_list: Mutable list receiving paint commands.
     """
     if layout_object.should_paint():
         display_list.extend(layout_object.paint())
@@ -356,6 +427,12 @@ def form_encode(fields):
 
     Spaces become ``+`` and non-ASCII characters are encoded from their
     UTF-8 bytes using percent escapes.
+
+    Args:
+        fields: Iterable of ``(name, value)`` pairs.
+
+    Returns:
+        An ``application/x-www-form-urlencoded`` string.
     """
     parts = []
 
@@ -368,7 +445,14 @@ def form_encode(fields):
 
 
 def form_quote(value):
-    """Encode one form field name or value without importing a helper."""
+    """Encode one form field name or value without importing a helper.
+
+    Args:
+        value: Field name or value to encode.
+
+    Returns:
+        The UTF-8 percent-encoded field text.
+    """
     result = ""
 
     for byte in str(value).encode("utf-8"):
