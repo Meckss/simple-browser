@@ -5,6 +5,8 @@ from pathlib import Path
 import dukpy
 
 from browser.css.parser import CSSParser
+from ..html.parser import HTMLParser
+from ..html.text import Text
 
 
 class JSContext:
@@ -27,6 +29,8 @@ class JSContext:
         self.interpreter.export_function("log", print)
         self.interpreter.export_function("querySelectorAll", self.query_selector_all)
         self.interpreter.export_function("getAttribute", self.get_attributes)
+        self.interpreter.export_function("innerHTML_set", self.innerHTML_set)
+        self.interpreter.export_function("textContent_set", self.textContent_set)
         self.interpreter.evaljs(self.RUNTIME_JS)
 
     def run(self, script):
@@ -112,3 +116,30 @@ class JSContext:
             event_type=event_type,
             handle=handle,
         )
+
+    def innerHTML_set(self, handle, s):
+        """Replace an element's children with an HTML fragment.
+
+        Args:
+            handle: Integer handle for the element to update.
+            s: HTML source to parse as the element's new contents.
+        """
+        doc = HTMLParser("<html><body>" + s + "</body></html>").parse_html()
+        new_nodes = doc.children[0].children
+        elt = self.handle_to_node[handle]
+        elt.children = new_nodes
+        for child in elt.children:
+            child.parent = elt
+
+        self.tab.relayout()
+
+    def textContent_set(self, handle, value):
+        """Replace an element's children with one literal text node.
+
+        Args:
+            handle: Integer handle for the element to update.
+            value: Text value to assign, or an empty string to clear it.
+        """
+        elt = self.handle_to_node[handle]
+        elt.children = [] if value == "" else [Text(value, elt)]
+        self.tab.relayout()

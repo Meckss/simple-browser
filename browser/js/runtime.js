@@ -69,10 +69,29 @@ var document = { querySelectorAll: function(s) {
     return handles.map(function(h) { return new Node(h); });
 } };
 
+/** Return the current value of a form control. */
+Object.defineProperty(Node.prototype, "value", {
+    get: function() {
+        return this.getAttribute("value");
+    }
+});
+
 // Install the built-in input listener after the DOM bridge is available.
 var inputs = document.querySelectorAll("input");
 for (var i = 0; i < inputs.length; i++) {
     inputs[i].addEventListener("keydown", lengthCheck);
 }
 
-console.log("Hi from JS!");
+/** Replace the wrapped element's children with an HTML fragment. */
+Object.defineProperty(Node.prototype, 'innerHTML', {
+    set: function(s) {
+        call_python("innerHTML_set", this.handle, s.toString());
+    }
+});
+
+/** Replace the wrapped element's children with literal text. */
+Object.defineProperty(Node.prototype, "textContent", {
+    set: function(s) {
+        call_python("textContent_set", this.handle, String(s));
+    }
+});

@@ -46,6 +46,8 @@ class Tab:
         self.elementNodes = []
         self.scripts = []
         self.js = JSContext(self)
+        self.root = None
+        self.rules = []
 
     def render_text(self, text, page=None):
         """Parse, style, lay out, and paint an HTML document.
@@ -105,6 +107,7 @@ class Tab:
         """
         self._layout_width = width
         root = HTMLParser(body).parse_html()
+        self.root = root
         rules = DEFAULT_STYLE_SHEET.copy()
         self.elementNodes = [node for node in tree_to_list(root, []) if isinstance(node, Element)]
         for node in self.elementNodes:
@@ -132,10 +135,11 @@ class Tab:
                     continue
                 rules.extend(stylesheet_rules)
         self.scripts = [node for node in self.elementNodes if node.tag == "script" and "src" in node.attributes]
-        style(root, sorted(rules, key = cascade_priority))
+        self.rules = sorted(rules, key=cascade_priority)
+        style(root, self.rules)
         self.layout = DocumentLayout(root, width)
         self.layout.layout()
-    
+
     def resize(self, width):
         """Reflow the current document after the viewport is resized.
 
@@ -145,11 +149,10 @@ class Tab:
         Args:
             width: New layout viewport width in pixels.
         """
-        if width <= 0 or not self.text or width == self._layout_width:
+        if width <= 0 or self.root is None or width == self._layout_width:
             return
-        self.make_layout(self.text, width, self.page)
-        self.display_list = []
-        paint_tree(self.layout, self.display_list)
+        self._layout_width = width
+        self.relayout()
 
     def click(self, x, y, scroll=0):
         """Dispatch a click and apply the default action at ``x``, ``y``.
@@ -246,6 +249,7 @@ class Tab:
             return False
         self.js.dispatch_event("keydown", self.focus)
         self.focus.attributes["value"] += char
+        self.js.dispatch_event("input", self.focus)
         self.repaint()
         return True
 
@@ -277,6 +281,7 @@ class Tab:
         if not value:
             return False
         self.focus.attributes["value"] = value[:-1]
+        self.js.dispatch_event("input", self.focus)
         self.repaint()
         return True
 
@@ -373,17 +378,42 @@ class Tab:
                 return
 
             page, body = load_page(requested_page, payload = payload)
+            self.render_text(body, page=page)
             for script in self.scripts:
                 script_url = page.resolve(script.attributes["src"])
                 try:
-                    body = script_url.request()
+                    script_body = script_url.request()
                 except (OSError, ValueError, RuntimeError):
                     continue
-                self.js.run(body)
-            self.render_text(body, page=page)
-            
+                self.js.run(script_body)
+
         except (OSError, ValueError, RuntimeError) as error:
             self.show_error("Unable to load page", str(error))
+
+    def relayout(self):
+        """Restyle, reflow, and repaint the current document tree.
+
+        This preserves the parsed document while updating the flat element
+        index used by the JavaScript bridge. It is used after DOM mutations
+        and viewport changes that do not require fetching the document again.
+        """
+        if self.root is None:
+            return
+
+        self.elementNodes = [
+            node for node in tree_to_list(self.root, [])
+            if isinstance(node, Element)
+        ]
+
+        style(self.root, self.rules)
+
+        self.layout = DocumentLayout(
+            self.root,
+            self._layout_width or WIDTH,
+        )
+        self.layout.layout()
+
+        self.repaint()
         
         
 def load_page(page, max_redirects=10, payload=None):
