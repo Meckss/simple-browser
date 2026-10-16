@@ -52,6 +52,9 @@ class Tab:
     def render_text(self, text, page=None):
         """Parse, style, lay out, and paint an HTML document.
 
+        Rendering a new document also resets the document-scoped JavaScript
+        context, invalidating handles and listeners from the previous page.
+
         Args:
             text: HTML source to display.
             page: Optional resource metadata used to resolve relative URLs.
@@ -61,6 +64,7 @@ class Tab:
         self.page = page
 
         self.make_layout(text, self._layout_width or WIDTH, page)
+        self.js.reset_document()
         self.display_list = []
         paint_tree(self.layout, self.display_list)
         self.fragment_scroll = self._fragment_scroll(page)

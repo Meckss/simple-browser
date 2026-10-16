@@ -25,13 +25,23 @@ class JSContext:
         self.tab = tab
         self.node_to_handle = {}
         self.handle_to_node = {}
+        self.next_handle = 0
         self.interpreter = dukpy.JSInterpreter()
+        self.install_exports()
+        self.interpreter.evaljs(self.RUNTIME_JS)
+
+    def install_exports(self):
+        """Register Python callbacks used by the JavaScript runtime.
+
+        The callbacks are installed on the current Dukpy interpreter. This
+        method must be called after creating or replacing
+        :attr:`interpreter`, and it does not execute the runtime source.
+        """
         self.interpreter.export_function("log", print)
         self.interpreter.export_function("querySelectorAll", self.query_selector_all)
         self.interpreter.export_function("getAttribute", self.get_attributes)
         self.interpreter.export_function("innerHTML_set", self.innerHTML_set)
         self.interpreter.export_function("textContent_set", self.textContent_set)
-        self.interpreter.evaljs(self.RUNTIME_JS)
 
     def run(self, script):
         """Run page JavaScript and report interpreter errors.
@@ -67,6 +77,11 @@ class JSContext:
     def get_handle(self, elt):
         """Return the stable JavaScript handle assigned to an element.
 
+        Handles are unique for the lifetime of this document's JavaScript
+        context. The counter is intentionally monotonic so that removing a
+        handle later cannot cause a stale JavaScript wrapper to refer to a
+        different element.
+
         Args:
             elt: The parsed HTML element to expose to JavaScript.
 
@@ -74,7 +89,8 @@ class JSContext:
             An integer handle that can be passed back through the bridge.
         """
         if elt not in self.node_to_handle:
-            handle = len(self.node_to_handle)
+            handle = self.next_handle
+            self.next_handle += 1
             self.node_to_handle[elt] = handle
             self.handle_to_node[handle] = elt
         else:
@@ -143,3 +159,21 @@ class JSContext:
         elt = self.handle_to_node[handle]
         elt.children = [] if value == "" else [Text(value, elt)]
         self.tab.relayout()
+
+    def reset_document(self):
+        """Replace the JavaScript environment for the current document.
+
+        Navigation invalidates all handles and page-owned JavaScript state.
+        Clearing the Python-side maps releases the old DOM elements, while
+        replacing the interpreter releases JavaScript listeners and globals
+        belonging to the previous document. The caller must update the tab's
+        parsed document and ``elementNodes`` before calling this method so the
+        runtime can initialize against the new DOM.
+        """
+        self.node_to_handle.clear()
+        self.handle_to_node.clear()
+        self.next_handle = 0
+
+        self.interpreter = dukpy.JSInterpreter()
+        self.install_exports()
+        self.interpreter.evaljs(self.RUNTIME_JS)
